@@ -52,4 +52,4 @@ CLARIS is released under the MIT License. See [LICENSE](LICENSE) for details.
 
 ## Contact
 
-Questions, feedback, or partnership inquiries: **sashikumaaran@gmail.com**
+Questions, feedback, or partnership inquiries: **Ping me**
