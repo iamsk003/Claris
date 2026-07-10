@@ -1,0 +1,21 @@
+# Local demo only. The batch agent is the root Dockerfile, not this.
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    env_file: .env
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./claris:/app/claris:ro
+
+  web:
+    build:
+      context: ./web
+    depends_on:
+      - api
+    environment:
+      - NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
+    ports:
+      - "3000:3000"

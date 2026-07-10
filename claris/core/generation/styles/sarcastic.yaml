@@ -1,0 +1,47 @@
+# Sarcastic caption contract. The joke lives in the GAP between the flat tone and
+# the event. Deadpan, never cruel. If it reads as excited, it has failed.
+name: sarcastic
+intent: >
+  Describe the event accurately while quietly implying it is less remarkable, or more
+  absurd, than someone clearly believes. The humor is the distance between the calm,
+  unbothered delivery and what is actually happening on screen.
+voice: >
+  Dry, deadpan, faux-neutral. Understatement and feigned, mild enthusiasm. The
+  narrator is unimpressed but too polite to say so directly.
+sentence_length_target: "14 to 26 words, one or two sentences"
+lexicon_prefer:
+  - apparently
+  - of course
+  - naturally
+  - a bold choice
+  - as one does
+  - to nobody's surprise
+lexicon_forbid:
+  - lol
+  - haha
+  - literally
+  - epic
+  - "\U0001F602"
+  - "\U0001F644"
+humor_device: understatement and ironic feigned enthusiasm
+forbidden_moves:
+  - emoji of any kind
+  - "\"lol\", \"haha\", or typed-out laughter"
+  - "self-labeling the joke (\"sarcastically\", \"how ironic\", \"see what I did there\")"
+  - "punching down: mocking the subject's looks, intelligence, weight, or competence"
+  - genuine unironic excitement or exclamation points
+  - insulting the viewer
+length_words: [14, 55]
+few_shot:
+  - ledger_excerpt: |
+      [ev_0003] audio_event 5.0-9.0s (conf 0.88): Loud sizzling sound.
+      [ev_0007] visual 28.0-38.0s (conf 0.90): The cook tilts the pan and spoons foaming butter over the steak repeatedly.
+    caption: >
+      Nothing says a calm evening in like setting off the smoke alarm and then lovingly
+      basting a piece of meat in butter for what feels like a small eternity.
+  - ledger_excerpt: |
+      [ev_0002] motion 4.0-5.0s (conf 0.84): A red frisbee is thrown across the frame from left to right.
+      [ev_0005] motion 11.0-13.0s (conf 0.79): The dog leaps and catches the frisbee mid-air.
+    caption: >
+      The dog has once again heroically defeated the frisbee, a menace that will
+      return to threaten everyone the very second it is thrown again.

@@ -1,0 +1,114 @@
+{
+  "ledger_id": "led_golden_coding_demo",
+  "task_id": "golden_coding_demo",
+  "video_sha256": "0000000000000000000000000000000000000000000000000000000000000002",
+  "video_meta": {
+    "video_sha256": "0000000000000000000000000000000000000000000000000000000000000002",
+    "duration_s": 63.0,
+    "fps": 24.0,
+    "width": 2560,
+    "height": 1440,
+    "has_audio": true,
+    "container": "mp4",
+    "video_codec": "h264",
+    "audio_codec": "aac"
+  },
+  "items": [
+    {
+      "id": "E001",
+      "kind": "visual",
+      "t_start": 0.0,
+      "t_end": 4.0,
+      "content": "A screen-share of a dark-themed terminal next to a code editor.",
+      "confidence": 0.95,
+      "source_model": "gemma-3-vlm"
+    },
+    {
+      "id": "E002",
+      "kind": "speech",
+      "t_start": 0.5,
+      "t_end": 6.0,
+      "content": "So I built a little CLI that batches API calls and retries them with backoff.",
+      "confidence": 0.92,
+      "source_model": "whisper-large-v3"
+    },
+    {
+      "id": "E003",
+      "kind": "ocr",
+      "t_start": 4.0,
+      "t_end": 10.0,
+      "content": "$ claris-agent --input tasks.json --replay",
+      "confidence": 0.97,
+      "source_model": "paddle-ocr"
+    },
+    {
+      "id": "E004",
+      "kind": "ocr",
+      "t_start": 10.0,
+      "t_end": 16.0,
+      "content": "def retry(fn, attempts=5, base=0.5): ...",
+      "confidence": 0.85,
+      "source_model": "paddle-ocr"
+    },
+    {
+      "id": "E005",
+      "kind": "speech",
+      "t_start": 12.0,
+      "t_end": 19.0,
+      "content": "If it hits a 429 it waits, jitters, and tries again instead of just dying.",
+      "confidence": 0.9,
+      "source_model": "whisper-large-v3"
+    },
+    {
+      "id": "E006",
+      "kind": "motion",
+      "t_start": 20.0,
+      "t_end": 22.0,
+      "content": "The presenter runs the command; log lines scroll rapidly in the terminal.",
+      "confidence": 0.8,
+      "source_model": "gemma-3-vlm"
+    },
+    {
+      "id": "E007",
+      "kind": "ocr",
+      "t_start": 23.0,
+      "t_end": 30.0,
+      "content": "[INFO] 12 tasks completed, 0 failed, 3 retried",
+      "confidence": 0.93,
+      "source_model": "paddle-ocr"
+    },
+    {
+      "id": "E008",
+      "kind": "speech",
+      "t_start": 31.0,
+      "t_end": 38.0,
+      "content": "Twelve done, zero failed. The three that retried were rate limits, not bugs.",
+      "confidence": 0.88,
+      "source_model": "whisper-large-v3"
+    },
+    {
+      "id": "E009",
+      "kind": "visual",
+      "t_start": 45.0,
+      "t_end": 63.0,
+      "content": "A green checkmark and a summary panel appear; the presenter leans back smiling.",
+      "confidence": 0.86,
+      "source_model": "gemma-3-vlm"
+    }
+  ],
+  "perception_models": [
+    "gemma-3-vlm",
+    "whisper-large-v3",
+    "paddle-ocr"
+  ],
+  "coverage": 0.8413,
+  "modality_flags": {
+    "has_speech": true,
+    "has_ocr": true,
+    "has_audio_event": false,
+    "has_visual": true,
+    "has_motion": true,
+    "is_silent": false
+  },
+  "created_at": "2026-07-09T06:18:46.016810Z"
+}

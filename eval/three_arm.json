@@ -1,0 +1,132 @@
+{
+  "synthetic": true,
+  "profile": "cheap",
+  "spend_usd": 0.112006,
+  "per_arm": {
+    "A_off_parallel": {
+      "accuracy": 3.0,
+      "tone_fidelity": 4.0,
+      "overall": 3.5,
+      "wall_clock_s": 1.7662
+    },
+    "B_on_parallel": {
+      "accuracy": 5.0,
+      "tone_fidelity": 4.0,
+      "overall": 4.5,
+      "wall_clock_s": 1.769
+    },
+    "C_on_sequential": {
+      "accuracy": 5.0,
+      "tone_fidelity": 4.0,
+      "overall": 4.5,
+      "wall_clock_s": 1.0237
+    }
+  },
+  "deltas_vs_A": {
+    "B_on_parallel": {
+      "accuracy": 2.0,
+      "tone_fidelity": 0.0,
+      "overall": 1.0
+    },
+    "C_on_sequential": {
+      "accuracy": 2.0,
+      "tone_fidelity": 0.0,
+      "overall": 1.0
+    }
+  },
+  "per_clip_similarity": [
+    {
+      "clip": "golden_cooking",
+      "arm": "A_off_parallel",
+      "worst_pair": [
+        "formal",
+        "humorous_tech"
+      ],
+      "worst_sim": 0.5833,
+      "sarcastic_vs_non_tech": 0.4118
+    },
+    {
+      "clip": "golden_cooking",
+      "arm": "B_on_parallel",
+      "worst_pair": [
+        "formal",
+        "humorous_tech"
+      ],
+      "worst_sim": 0.6396,
+      "sarcastic_vs_non_tech": 0.4737
+    },
+    {
+      "clip": "golden_cooking",
+      "arm": "C_on_sequential",
+      "worst_pair": [
+        "formal",
+        "humorous_tech"
+      ],
+      "worst_sim": 0.6396,
+      "sarcastic_vs_non_tech": 0.4737
+    },
+    {
+      "clip": "golden_coding_demo",
+      "arm": "A_off_parallel",
+      "worst_pair": [
+        "formal",
+        "humorous_tech"
+      ],
+      "worst_sim": 0.6396,
+      "sarcastic_vs_non_tech": 0.4737
+    },
+    {
+      "clip": "golden_coding_demo",
+      "arm": "B_on_parallel",
+      "worst_pair": [
+        "formal",
+        "humorous_tech"
+      ],
+      "worst_sim": 0.7426,
+      "sarcastic_vs_non_tech": 0.6
+    },
+    {
+      "clip": "golden_coding_demo",
+      "arm": "C_on_sequential",
+      "worst_pair": [
+        "formal",
+        "humorous_tech"
+      ],
+      "worst_sim": 0.7426,
+      "sarcastic_vs_non_tech": 0.6
+    },
+    {
+      "clip": "golden_dog_park",
+      "arm": "A_off_parallel",
+      "worst_pair": [
+        "formal",
+        "humorous_tech"
+      ],
+      "worst_sim": 0.5477,
+      "sarcastic_vs_non_tech": 0.375
+    },
+    {
+      "clip": "golden_dog_park",
+      "arm": "B_on_parallel",
+      "worst_pair": [
+        "formal",
+        "humorous_tech"
+      ],
+      "worst_sim": 0.6623,
+      "sarcastic_vs_non_tech": 0.5
+    },
+    {
+      "clip": "golden_dog_park",
+      "arm": "C_on_sequential",
+      "worst_pair": [
+        "formal",
+        "humorous_tech"
+      ],
+      "worst_sim": 0.6623,
+      "sarcastic_vs_non_tech": 0.5
+    }
+  ],
+  "separation_threshold": 0.82,
+  "n_clips": 3,
+  "judge_model": "mock-held-out-judge"
+}

@@ -1,0 +1,55 @@
+# Humorous-non-tech caption contract. Everyday observational comedy, and WARM.
+# This is the style most likely to collide with 'sarcastic', so the contract pulls
+# the opposite way on purpose: where sarcastic is dry and detached, this is fond and
+# generous. It laughs WITH the subject. It contains zero technical vocabulary.
+name: humorous_non_tech
+intent: >
+  Find the funny, relatable, human thing in an ordinary moment and say it with
+  affection. The reader should smile and feel the narrator likes whoever or whatever
+  is on screen. Think kind observational comedy, not a roast.
+voice: >
+  Warm, playful, fond. Gently exaggerated in the way a friend narrates something
+  cute. The narrator is clearly on the subject's side.
+sentence_length_target: "14 to 28 words, one or two sentences"
+lexicon_prefer:
+  - little
+  - absolutely
+  - deeply committed
+  - with his whole heart
+  - the kind of
+  - beloved
+lexicon_forbid:
+  - app
+  - api
+  - code
+  - server
+  - algorithm
+  - pixels
+  - upload
+  - download
+  - device
+  - screen
+  - software
+humor_device: warm observational exaggeration and fond analogy
+forbidden_moves:
+  - "ANY technical vocabulary (computers, code, apps, screens, data, AI, devices)"
+  - "dryness or deadpan detachment (that belongs to the sarcastic style)"
+  - contempt, mockery, or making the subject the butt of the joke
+  - sarcasm or feigned enthusiasm; the warmth must be sincere
+  - cruelty about appearance or ability
+length_words: [14, 55]
+few_shot:
+  - ledger_excerpt: |
+      [ev_0003] motion 5.0-11.0s (conf 0.90): The dog sprints after the frisbee, kicking up grass.
+      [ev_0005] motion 11.0-13.0s (conf 0.79): The dog leaps and catches the frisbee mid-air.
+      [ev_0007] visual 16.0-24.0s (conf 0.88): The dog trots back with the frisbee in its mouth, tail wagging.
+    caption: >
+      Here is a dog whose entire life plan is: spot the frisbee, become the frisbee's
+      biggest problem, catch it out of the sky, and trot back begging the world to
+      please, please do that again.
+  - ledger_excerpt: |
+      [ev_0006] speech 22.0-27.5s (conf 0.87): We add a knob of butter, some thyme, and a smashed garlic clove, then baste.
+      [ev_0007] visual 28.0-38.0s (conf 0.90): The cook tilts the pan and spoons foaming butter over the steak repeatedly.
+    caption: >
+      He spoons butter over that steak with the tender, unhurried devotion most people
+      reserve for a newborn or a very expensive houseplant they are terrified of killing.

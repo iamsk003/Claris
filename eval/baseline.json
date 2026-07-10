@@ -1,0 +1,49 @@
+{
+  "synthetic": true,
+  "providers": "mock",
+  "profile": "cheap",
+  "measurement": "held-out judge, independent of the gate_2 selection critic",
+  "note": "Deterministic MOCK run (no network). The held-out judge shares no scoring signal with the selection critic; the delta reflects grounding. Regenerate with --providers fireworks over real clips for real numbers.",
+  "spend_usd": 0.068283,
+  "spend_by_stage": {
+    "generation": 0.041328,
+    "gate_1": 0.006647,
+    "gate_2": 0.007628,
+    "held_out_judge": 0.01268
+  },
+  "judge_model": "mock-held-out-judge",
+  "gates_on": {
+    "formal": 4.5,
+    "sarcastic": 4.5,
+    "humorous_tech": 4.5,
+    "humorous_non_tech": 4.5
+  },
+  "gates_off": {
+    "formal": 3.5,
+    "sarcastic": 3.5,
+    "humorous_tech": 3.5,
+    "humorous_non_tech": 3.5
+  },
+  "delta": {
+    "formal": 1.0,
+    "sarcastic": 1.0,
+    "humorous_tech": 1.0,
+    "humorous_non_tech": 1.0
+  },
+  "mean_score_on": 4.5,
+  "mean_score_off": 3.5,
+  "mean_delta": 1.0,
+  "accuracy_on": 5.0,
+  "accuracy_off": 3.0,
+  "accuracy_delta": 2.0,
+  "tone_on": 4.0,
+  "tone_off": 4.0,
+  "tone_delta": 0.0,
+  "driver": "accuracy",
+  "mean_separation_on": 0.3981,
+  "mean_separation_off": 0.4963,
+  "max_similarity_on": 0.6815,
+  "max_similarity_off": 0.5902,
+  "separation_threshold": 0.82,
+  "n_clips": 3
+}

@@ -1,0 +1,50 @@
+# Secrets
+.env
+.env.local
+*.key
+
+# CLARIS runtime
+.claris_cache/
+.claris_logs/
+/output/
+run.log
+*.log
+input/*.mp4
+input/*.mov
+input/*.mkv
+eval/clips/*.mp4
+eval/clips/*.mov
+eval/clips/*.mkv
+eval/clips/*.webm
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# Node / Next.js
+web/node_modules/
+web/.next/
+web/out/
+web/.turbo/
+npm-debug.log*
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+
+# Internal — kept local, never published to the public repo
+.claude/
+CLAUDE.md
+PROJECT_STATE.md
+eval/clips/README.md
+eval/golden/README.md

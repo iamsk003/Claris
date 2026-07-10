@@ -1,0 +1,33 @@
+{
+  "source": "https://docs.fireworks.ai/serverless/pricing",
+  "fetched_at": "2026-07-09",
+  "unit": "USD per 1,000,000 tokens",
+  "note": "Serverless size-based rates apply uniformly to input and output tokens. The bucket rates below are quoted from the docs; the per-model bucket assignment is our assumption (Fireworks bills by served parameter count) and is overridable here. Unknown models fall back to default_price_per_1m.",
+  "buckets": {
+    "lt_4b": 0.10,
+    "4b_16b": 0.20,
+    "gt_16b": 0.90,
+    "moe_le_56b": 0.50,
+    "moe_56_176b": 1.20
+  },
+  "default_price_per_1m": 0.90,
+  "deployment_gpu_hourly": {
+    "h100": 7.00,
+    "h200": 7.00,
+    "b200": 10.00,
+    "b300": 12.00
+  },
+  "deployment_note": "Dedicated on-demand deployments (how we serve Gemma) bill by GPU-HOUR of UPTIME from the fireworks.ai/pricing page, not by tokens. Idle uptime bills the same as busy uptime.",
+  "model_prices_per_1m": {
+    "accounts/fireworks/models/gemma-3-vlm": 0.90,
+    "accounts/fireworks/models/gemma-3": 0.90,
+    "accounts/fireworks/models/gemma-3-4b": 0.20,
+    "accounts/fireworks/models/llama-v3p1-70b-instruct": 0.90
+  },
+  "model_bucket_assumptions": {
+    "accounts/fireworks/models/gemma-3-vlm": "Gemma 3 VLM assumed >16B -> gt_16b",
+    "accounts/fireworks/models/gemma-3": "Gemma 3 27B assumed >16B -> gt_16b",
+    "accounts/fireworks/models/gemma-3-4b": "Gemma 3 4B -> 4b_16b",
+    "accounts/fireworks/models/llama-v3p1-70b-instruct": "70B -> gt_16b"
+  }
+}

@@ -1,0 +1,19 @@
+# CLARIS demo web app image (the batch agent lives in the root Dockerfile).
+# Serves the FastAPI + WebSocket surface (claris.api). The Next.js frontend is
+# built and served separately (see docker-compose.yml).
+
+FROM python:3.11-slim AS runtime
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ffmpeg libgl1 libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY pyproject.toml uv.lock README.md ./
+COPY claris ./claris
+RUN uv sync --locked --no-dev
+
+ENV PATH="/app/.venv/bin:$PATH" \
+    PYTHONUNBUFFERED=1
+EXPOSE 8000
+CMD ["uvicorn", "claris.api.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000"]

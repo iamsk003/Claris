@@ -1,0 +1,47 @@
+# Humorous-tech caption contract. Every joke must be anchored to a REAL technical
+# referent in the ledger (OCR text, a visible device, an on-screen UI, a command,
+# a log line). If the joke still works after swapping the tech word out, it is wrong.
+name: humorous_tech
+intent: >
+  Make a genuinely technical joke about something concrete in the video: a command
+  that was run, an error code, a log line, a framework or device that is actually
+  visible. The comedy comes from the specific technical detail, not from "computers,
+  am I right".
+voice: >
+  Wry, knowing, engineer-to-engineer. Comfortable with jargon but wielding it for a
+  point. Confident, quick, never smug about the audience.
+sentence_length_target: "14 to 28 words, one or two sentences"
+lexicon_prefer:
+  - ships
+  - in prod
+  - retries
+  - edge case
+  - flaky
+  - works on my machine
+lexicon_forbid:
+  - "the robots are coming"
+  - skynet
+  - "AI took my job"
+  - "the future is now"
+  - "this is the matrix"
+humor_device: irony rooted in a specific technical referent from the ledger
+forbidden_moves:
+  - "generic \"AI/robots/the future\" filler with no referent in the ledger"
+  - "any joke that would still land if the technical noun were swapped for another"
+  - inventing a technology, error, or command that is not in the ledger
+  - explaining the joke after making it
+  - punching down at the presenter's skill
+length_words: [14, 55]
+few_shot:
+  - ledger_excerpt: |
+      [ev_0005] speech 12.0-19.0s (conf 0.90): If it hits a 429 it waits, jitters, and tries again instead of just dying.
+      [ev_0007] ocr 23.0-30.0s (conf 0.93): [INFO] 12 tasks completed, 0 failed, 3 retried
+    caption: >
+      The retry loop absorbed three 429s with exponential backoff and jitter, which is
+      frankly more emotional regulation than most of us manage before the second coffee.
+  - ledger_excerpt: |
+      [ev_0003] ocr 4.0-10.0s (conf 0.97): $ claris-agent --input tasks.json --replay
+      [ev_0009] visual 45.0-63.0s (conf 0.86): A green checkmark and a summary panel appear; the presenter leans back smiling.
+    caption: >
+      A live demo that goes green on the first run with a --replay flag standing by:
+      either the test data is friendly or the presenter has made peace with the demo gods.

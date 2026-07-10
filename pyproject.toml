@@ -1,0 +1,80 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "claris"
+version = "0.1.0"
+description = "CLARIS — multi-style video captioning that stays grounded in what the footage shows."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "CLARIS" }]
+keywords = ["video-captioning", "multimodal", "gemma", "whisper", "fireworks"]
+
+dependencies = [
+    "fastapi",
+    "uvicorn[standard]",
+    "pydantic>=2",
+    "httpx",
+    "tenacity",
+    "ffmpeg-python",
+    "scenedetect",
+    "opencv-python-headless",
+    "imagehash",
+    "pillow",
+    "faster-whisper",
+    # Pin to the 2.x line: 3.x removed show_log and changed the .ocr() result format the
+    # OCR parser expects. (Regenerate uv.lock in a real env for this to take effect.)
+    "paddleocr>=2.7,<3.0",
+    "paddlepaddle==2.6.2",
+    "Cython<3",
+    "setuptools<70",
+    "numpy==1.26.4",
+    "librosa",
+    "sentence-transformers",
+    # Declared direct (it is otherwise transitive via sentence-transformers) so the
+    # [tool.uv.sources] CPU-index pin below binds to it — uv only reliably applies a source
+    # to a package the project names. Without this, a real relock pulls the CUDA torch wheel
+    # and its ~2-5GB of nvidia-*/cuda deps that never load on the CPU-only agent container.
+    "torch",
+    "structlog",
+    # Required to load the declarative style contracts (styles/*.yaml). Not in the
+    # supplied backend list, but generation cannot parse its contracts without it.
+    "pyyaml",
+]
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+]
+
+[project.scripts]
+claris-agent = "claris.agent.main:main"
+
+# CPU-only PyTorch. The agent container has no GPU, and torch is used only for the MiniLM
+# embedding in gate_3 (tone separation) — no training runs in the image. The default PyPI
+# torch wheel for Linux depends on the NVIDIA CUDA runtime (~2-5GB of nvidia-*/cuda packages
+# that never load on CPU). Pulling torch from PyTorch's CPU index drops all of it.
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu" }]
+
+[tool.hatch.build.targets.wheel]
+packages = ["claris"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "eval"]
+asyncio_mode = "auto"

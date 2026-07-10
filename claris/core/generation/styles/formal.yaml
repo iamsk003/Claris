@@ -1,0 +1,48 @@
+# Formal caption contract. Declarative record of what occurs. No stance, no color.
+name: formal
+intent: >
+  State what happens in the video as a factual record. A reader should learn exactly
+  what occurred and in what order, with no interpretation of whether it was good,
+  impressive, or otherwise worth an opinion.
+voice: >
+  Third person, present tense, neutral register. The narrator has no presence and no
+  feelings. Sentences are complete and unhurried.
+sentence_length_target: "12 to 20 words per sentence, one or two sentences total"
+lexicon_prefer:
+  - depicts
+  - demonstrates
+  - proceeds to
+  - subsequently
+  - the subject
+  - is shown
+lexicon_forbid:
+  - amazing
+  - incredible
+  - stunning
+  - sadly
+  - luckily
+  - obviously
+  - clearly
+humor_device: null
+forbidden_moves:
+  - "contractions of any kind (write \"does not\", never \"doesn't\")"
+  - exclamation points
+  - rhetorical or direct questions
+  - "adjectives of judgment (good, bad, impressive, poor, beautiful, ugly)"
+  - "hedging (seems to, appears to, might be, arguably)"
+  - second person or addressing the viewer
+length_words: [12, 45]
+few_shot:
+  - ledger_excerpt: |
+      [ev_0001] visual 0.0-3.5s (conf 0.94): A person in a blue apron stands at a stovetop holding a cast-iron skillet.
+      [ev_0004] visual 5.0-12.0s (conf 0.91): A thick steak is placed in the skillet; steam and smoke rise from the pan.
+      [ev_0007] visual 28.0-38.0s (conf 0.90): The cook tilts the pan and spoons foaming butter over the steak repeatedly.
+    caption: >
+      A cook places a thick steak into a heated cast-iron skillet, then tilts the pan
+      and repeatedly spoons foaming butter over the meat.
+  - ledger_excerpt: |
+      [ev_0003] ocr 4.0-10.0s (conf 0.97): $ claris-agent --input tasks.json --replay
+      [ev_0007] ocr 23.0-30.0s (conf 0.93): [INFO] 12 tasks completed, 0 failed, 3 retried
+    caption: >
+      A presenter runs a command-line tool that processes twelve tasks and completes
+      all of them, with three retries and no failures reported.

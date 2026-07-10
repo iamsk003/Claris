@@ -1,0 +1,105 @@
+{
+  "ledger_id": "led_golden_cooking",
+  "task_id": "golden_cooking",
+  "video_sha256": "0000000000000000000000000000000000000000000000000000000000000001",
+  "video_meta": {
+    "video_sha256": "0000000000000000000000000000000000000000000000000000000000000001",
+    "duration_s": 47.0,
+    "fps": 30.0,
+    "width": 1920,
+    "height": 1080,
+    "has_audio": true,
+    "container": "mp4",
+    "video_codec": "h264",
+    "audio_codec": "aac"
+  },
+  "items": [
+    {
+      "id": "E001",
+      "kind": "visual",
+      "t_start": 0.0,
+      "t_end": 3.5,
+      "content": "A person in a blue apron stands at a stovetop holding a cast-iron skillet.",
+      "confidence": 0.94,
+      "source_model": "gemma-3-vlm"
+    },
+    {
+      "id": "E002",
+      "kind": "speech",
+      "t_start": 1.2,
+      "t_end": 5.0,
+      "content": "Okay, the pan is screaming hot, so we're going to lay the steak down away from us.",
+      "confidence": 0.9,
+      "source_model": "whisper-large-v3"
+    },
+    {
+      "id": "E003",
+      "kind": "audio_event",
+      "t_start": 5.0,
+      "t_end": 9.0,
+      "content": "Loud sizzling sound.",
+      "confidence": 0.88,
+      "source_model": "panns-audio-tagger"
+    },
+    {
+      "id": "E004",
+      "kind": "visual",
+      "t_start": 5.0,
+      "t_end": 12.0,
+      "content": "A thick steak is placed in the skillet; steam and smoke rise from the pan.",
+      "confidence": 0.91,
+      "source_model": "gemma-3-vlm"
+    },
+    {
+      "id": "E005",
+      "kind": "motion",
+      "t_start": 18.0,
+      "t_end": 20.0,
+      "content": "The cook flips the steak with tongs.",
+      "confidence": 0.82,
+      "source_model": "gemma-3-vlm"
+    },
+    {
+      "id": "E006",
+      "kind": "speech",
+      "t_start": 22.0,
+      "t_end": 27.5,
+      "content": "We add a knob of butter, some thyme, and a smashed garlic clove, then baste.",
+      "confidence": 0.87,
+      "source_model": "whisper-large-v3"
+    },
+    {
+      "id": "E007",
+      "kind": "visual",
+      "t_start": 28.0,
+      "t_end": 38.0,
+      "content": "The cook tilts the pan and spoons foaming butter over the steak repeatedly.",
+      "confidence": 0.9,
+      "source_model": "gemma-3-vlm"
+    },
+    {
+      "id": "E008",
+      "kind": "visual",
+      "t_start": 40.0,
+      "t_end": 47.0,
+      "content": "The finished steak rests on a wooden board and is sliced to show a pink interior.",
+      "confidence": 0.89,
+      "source_model": "gemma-3-vlm"
+    }
+  ],
+  "perception_models": [
+    "gemma-3-vlm",
+    "whisper-large-v3",
+    "panns-audio-tagger"
+  ],
+  "coverage": 0.7766,
+  "modality_flags": {
+    "has_speech": true,
+    "has_ocr": false,
+    "has_audio_event": true,
+    "has_visual": true,
+    "has_motion": true,
+    "is_silent": false
+  },
+  "created_at": "2026-07-09T06:18:46.014918Z"
+}
