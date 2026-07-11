@@ -39,6 +39,13 @@ class VerificationConfig:
     critic_model: str = "accounts/fireworks/models/gemma-3"
     embed_model: str = "sentence-transformers/all-MiniLM-L6-v2"
 
+    # Token budget for the gate LLM calls. Matches generation's 2048: the resolved model may
+    # be a non-Gemma reasoning model whose chain-of-thought must fit BEFORE the JSON verdict,
+    # and the default 512 was too small — reasoning consumed it and the JSON never arrived, so
+    # both gates failed closed (degraded / critic_unavailable). Reasoning is left on: gpt-oss
+    # rejects reasoning_effort=none, and Gemma already gets it disabled in the provider.
+    verify_max_tokens: int = 2048
+
     # Timeouts (seconds).
     judge_timeout_s: float = 60.0
     critic_timeout_s: float = 60.0

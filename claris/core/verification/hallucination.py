@@ -227,6 +227,7 @@ async def assess_candidate(
             seed=seed,
             timeout_s=cfg.judge_timeout_s,
             json_mode=True,
+            max_tokens=cfg.verify_max_tokens,
         )
         log_llm_call(sink, run_id, "gate_1", result,
                      event_id=f"{run_id}:{candidate.candidate_id}:gate1_call")

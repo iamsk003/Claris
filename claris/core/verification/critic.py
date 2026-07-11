@@ -150,6 +150,7 @@ async def critique_candidate(
             result = await critic.complete(
                 system=system, prompt=user, temperature=cfg.critic_temperature,
                 seed=seed, timeout_s=cfg.critic_timeout_s, json_mode=True,
+                max_tokens=cfg.verify_max_tokens,
             )
             critic_model = result.model
             log_llm_call(sink, run_id, "gate_2", result,
