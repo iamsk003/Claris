@@ -41,24 +41,17 @@ import json
 import logging
 import os
 import shutil
-import sys
 import tempfile
 import time
-import traceback
 import uuid
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Optional
 
-from fastapi import FastAPI, File, Request, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, File, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
-
-# TEMPORARY DIAGNOSTIC INSTRUMENTATION (see the block below). Prints go straight to stdout so
-# Railway captures them regardless of the logging configuration. Remove once the 502 /
-# "Application failed to respond" cause is found.
-print("[claris.api] module import: claris.api.main loaded", file=sys.stdout, flush=True)
 
 # --------------------------------------------------------------------------- #
 # Structured logging
@@ -84,38 +77,6 @@ class _JsonFormatter(logging.Formatter):
 
 def _log(level: int, msg: str, **fields: Any) -> None:
     _LOG.log(level, msg, extra={"extra_fields": fields})
-
-
-# --- TEMPORARY DIAGNOSTIC HELPERS ------------------------------------------ #
-# These exist only to surface the real failure in Railway logs. Delete once resolved.
-
-
-def _diag(msg: str) -> None:
-    """Write a diagnostic line straight to stdout, unbuffered — the surest way to make it
-    appear in the platform log stream no matter how logging is configured."""
-    print(f"[claris.api] {msg}", file=sys.stdout, flush=True)
-
-
-def _configure_diagnostic_logging() -> None:
-    """Route *everything* to stdout at INFO so Railway captures uvicorn access logs, the
-    request middleware, tracebacks, and lifespan events in one stream."""
-    root = logging.getLogger()
-    root.setLevel(logging.INFO)
-    if not any(getattr(h, "_claris_diag", False) for h in root.handlers):
-        handler = logging.StreamHandler(sys.stdout)
-        handler.setFormatter(
-            logging.Formatter("%(asctime)s | %(levelname)-7s | %(name)s | %(message)s")
-        )
-        setattr(handler, "_claris_diag", True)
-        root.addHandler(handler)
-    # Structured claris.api records also go to stdout; let them reach the root handler too.
-    _LOG.setLevel(logging.INFO)
-    _LOG.propagate = True
-    # Access logs ON and visible (they are emitted by uvicorn's own loggers).
-    for name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
-        lg = logging.getLogger(name)
-        lg.setLevel(logging.INFO)
-        lg.propagate = True
 
 
 # --------------------------------------------------------------------------- #
@@ -331,24 +292,20 @@ async def _process(
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
-    # TEMPORARY: lifespan logger (items 6, 7, 9).
-    _diag("LIFESPAN: startup begin")
-    _log(logging.INFO, "lifespan startup", title=app.title, routes=len(app.routes))
-    try:
-        yield
-    finally:
-        _diag("LIFESPAN: shutdown begin")
-        _log(logging.INFO, "lifespan shutdown")
-        clips = getattr(app.state, "clips", None)
-        if clips is not None:
-            clips.clear()  # remove any temp clip files on shutdown
-        _diag("LIFESPAN: shutdown done")
+    yield
+    clips = getattr(app.state, "clips", None)
+    if clips is not None:
+        clips.clear()  # remove any temp clip files on shutdown
 
 
 def create_app() -> FastAPI:
     """Build and return the FastAPI application (used by ``--factory``)."""
-    _configure_diagnostic_logging()  # TEMPORARY: everything to stdout for Railway
-    _diag("create_app: building FastAPI application")
+    if not any(isinstance(h.formatter, _JsonFormatter) for h in _LOG.handlers):
+        handler = logging.StreamHandler()
+        handler.setFormatter(_JsonFormatter())
+        _LOG.addHandler(handler)
+        _LOG.setLevel(os.getenv("CLARIS_LOG_LEVEL", "INFO").upper())
+        _LOG.propagate = False
 
     app = FastAPI(title="CLARIS API", version="1.0.0", lifespan=_lifespan)
     app.state.clips = ClipRegistry()
@@ -362,27 +319,6 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-
-    # ----- TEMPORARY DIAGNOSTIC MIDDLEWARE (items 1, 2, 3) ------------------ #
-    # Logs every incoming request, wraps the handler in try/except, and prints the full
-    # traceback of any exception so the real failure appears in the Railway log stream.
-    # If a request 502s but NO "--> ... <method> <path>" line appears here, the request is
-    # not reaching the app at all (a networking/port/transport issue, not a code exception).
-    @app.middleware("http")
-    async def _request_logger(request: Request, call_next):
-        _diag(f"--> {request.method} {request.url.path} "
-              f"(client={request.client.host if request.client else '?'})")
-        started = time.monotonic()
-        try:
-            response = await call_next(request)
-        except Exception as exc:  # noqa: BLE001 — diagnostic: expose, then re-raise
-            tb = traceback.format_exc()
-            _diag(f"!!! EXCEPTION in {request.method} {request.url.path}: {exc!r}\n{tb}")
-            _LOG.error("request exception", exc_info=True)
-            raise
-        dt = (time.monotonic() - started) * 1000
-        _diag(f"<-- {request.method} {request.url.path} {response.status_code} ({dt:.0f}ms)")
-        return response
 
     # ----- internal helpers (shared by the /api routes and the aliases) ---- #
 
@@ -521,28 +457,20 @@ def create_app() -> FastAPI:
 
     @app.get("/")
     async def root() -> dict:
-        # TEMPORARY diagnostic root (item 8).
-        _diag("route: GET / -> {'alive': true}")
-        return {"alive": True}
+        return {"service": "claris-api", "status": "ok"}
 
     @app.get("/health")
     async def health() -> dict:
         # Deliberately trivial: no dependencies, no engine imports. Answers before any model
         # is loaded so a platform health check always succeeds.
-        _diag("route: GET /health -> {'status': 'ok'}")
         return {"status": "ok"}
 
     @app.exception_handler(Exception)
-    async def _unhandled(request: Request, exc: Exception) -> JSONResponse:
-        # TEMPORARY (item 4): log every exception with a full traceback, then still return a
-        # clean JSON 500 rather than dropping the connection.
-        tb = traceback.format_exc()
-        _diag(f"!!! UNHANDLED EXCEPTION {request.method} {request.url.path}: {exc!r}\n{tb}")
-        _LOG.error("unhandled request error", exc_info=True)
-        return JSONResponse(
-            status_code=500,
-            content={"error": "internal server error", "type": type(exc).__name__, "detail": str(exc)},
-        )
+    async def _unhandled(_request, exc: Exception) -> JSONResponse:
+        # Last-resort net: any unexpected error becomes a clean JSON 500 rather than a
+        # dropped connection, so a single bad request can never take the process down.
+        _log(logging.ERROR, "unhandled request error", error=repr(exc))
+        return JSONResponse(status_code=500, content={"error": "internal server error"})
 
     @app.post("/api/clips")
     async def create_clip(file: UploadFile = File(...)) -> JSONResponse:
