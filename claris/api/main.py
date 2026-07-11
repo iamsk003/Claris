@@ -90,6 +90,10 @@ STAGE_OCR = "OCR"
 STAGE_SCENE = "Scene Understanding"
 STAGE_CAPTION = "Caption Generation"
 STAGE_FINISHED = "Finished"
+# The terminal event the frontend keys completion on (Processing.tsx routes to results when
+# it receives ``stage === "done"``). Every run — success, degraded, error, or timeout — must
+# end by emitting this, which also flips the run to finished and closes the event stream.
+STAGE_DONE = "done"
 
 
 # --------------------------------------------------------------------------- #
@@ -198,6 +202,19 @@ def _result_envelope(run_id: str, task_id: str, clip_id: str, ledger: Any, resul
     }
 
 
+def _emit_terminal(
+    publish: Callable[..., None], *, ok: bool, detail: str,
+    result: Optional[dict] = None, error: Optional[str] = None,
+) -> None:
+    """End a run. Emits ``Finished`` (the progress marker) then the terminal ``done`` event
+    the frontend routes on. Used by *every* exit path — success, degraded, error, timeout —
+    so the stream always closes and the UI never waits forever. A degraded run is a success:
+    it produced captions, so ``ok=True`` and the result envelope is carried through.
+    """
+    publish(STAGE_FINISHED, "done" if ok else "error", detail, result=result, error=error)
+    publish(STAGE_DONE, "completed" if ok else "error", detail, result=result, error=error)
+
+
 # --------------------------------------------------------------------------- #
 # The worker — reuses the existing pipeline; runs off the server loop
 # --------------------------------------------------------------------------- #
@@ -274,15 +291,15 @@ async def _process(
                     "degraded" if result.degraded else "4 captions selected and verified")
 
             envelope = _result_envelope(run_id, task_id, clip_id, ledger, result)
-            publish(STAGE_FINISHED, "done", "Captioning complete", result=envelope)
+            # Degraded is still a completed run with captions — end it as a success.
+            _emit_terminal(publish, ok=True, detail="Captioning complete", result=envelope)
             _log(logging.INFO, "run complete", run_id=run_id, degraded=result.degraded)
 
     try:
         await asyncio.wait_for(_run(), timeout=timeout_s)
     except Exception as exc:  # noqa: BLE001 — one run's failure must not crash the server
         _log(logging.ERROR, "run failed", run_id=run_id, error=repr(exc))
-        publish(STAGE_FINISHED, "error", f"Processing failed: {exc}",
-                result=None, error=str(exc))
+        _emit_terminal(publish, ok=False, detail=f"Processing failed: {exc}", error=str(exc))
 
 
 # --------------------------------------------------------------------------- #
@@ -332,9 +349,11 @@ def create_app() -> FastAPI:
             if state is None:
                 return
             state.events.append(event)
-            if event.get("stage") == STAGE_FINISHED:
+            # Completion is keyed on the terminal "done" event (not "Finished"), so the
+            # stream never breaks before "done" has been appended and sent.
+            if event.get("stage") == STAGE_DONE:
                 state.finished = True
-                state.status = "error" if event.get("status") == "error" else "done"
+                state.status = "error" if event.get("status") == "error" else "completed"
                 state.result = event.get("result")
                 state.error = event.get("error")
 
@@ -356,8 +375,7 @@ def create_app() -> FastAPI:
             await asyncio.to_thread(_worker)
         except Exception as exc:  # noqa: BLE001 — never let a run take down the server
             _log(logging.ERROR, "driver error", run_id=run_id, error=repr(exc))
-            publish(STAGE_FINISHED, "error", f"Processing failed: {exc}",
-                    result=None, error=str(exc))
+            _emit_terminal(publish, ok=False, detail=f"Processing failed: {exc}", error=str(exc))
 
     async def _save_clip(file: UploadFile) -> tuple[Optional[ClipState], Optional[JSONResponse]]:
         """Validate + persist an uploaded video, register it, and return the ClipState."""
@@ -429,8 +447,9 @@ def create_app() -> FastAPI:
         await websocket.accept()
         state = app.state.runs.get(run_id)
         if state is None:
+            # Terminal "done" (error) so the client stops waiting instead of hanging open.
             await websocket.send_json(
-                {"stage": STAGE_FINISHED, "status": "error", "t": 0.0,
+                {"stage": STAGE_DONE, "status": "error", "t": 0.0,
                  "detail": "unknown run_id", "error": "unknown run_id"}
             )
             await websocket.close()
