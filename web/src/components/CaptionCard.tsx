@@ -1,11 +1,33 @@
 import { useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import type { CaptionCandidate, EvidenceItem, StyledCaption } from "../types";
 import { STYLE_LABELS } from "../types";
 import { ScoreRadar } from "./ScoreRadar";
 import { CopyButton } from "./ui/CopyButton";
-import { captionEvidenceIds, citableSentences, firstStart } from "../lib/evidence";
+import { captionEvidenceIds, citableSentences, firstStart, laneOf, type Lane } from "../lib/evidence";
 import { useInspectStore } from "../store/useInspectStore";
-import { score1 } from "../lib/format";
+import { score1, timecode } from "../lib/format";
+
+// Compact modality vocabulary for the per-caption badges.
+const BADGE_ORDER: Lane[] = ["speech", "visual", "ocr", "audio"];
+const BADGE_LABEL: Record<Lane, string> = {
+  speech: "Speech",
+  visual: "Vision",
+  ocr: "OCR",
+  audio: "Audio",
+};
+const BADGE_CLASS: Record<Lane, string> = {
+  speech: "border-lane-speech/40 bg-lane-speech/10 text-lane-speech",
+  visual: "border-lane-visual/40 bg-lane-visual/10 text-lane-visual",
+  ocr: "border-lane-ocr/40 bg-lane-ocr/10 text-lane-ocr",
+  audio: "border-lane-audio/40 bg-lane-audio/10 text-lane-audio",
+};
+const BADGE_DOT: Record<Lane, string> = {
+  speech: "bg-lane-speech",
+  visual: "bg-lane-visual",
+  ocr: "bg-lane-ocr",
+  audio: "bg-lane-audio",
+};
 
 interface Props {
   caption: StyledCaption;
@@ -21,10 +43,18 @@ export function CaptionCard({ caption, candidates = [], byId, index }: Props) {
   const pinnedId = useInspectStore((s) => s.pinnedId);
 
   const [drawer, setDrawer] = useState(false);
+  const [showEvidence, setShowEvidence] = useState(false);
   const sentences = citableSentences(caption);
   const allIds = captionEvidenceIds(caption);
   const citesPinned = pinnedId ? allIds.includes(pinnedId) : false;
-  const hasLinkage = allIds.length > 0;
+
+  // The evidence items this caption actually cites, and which modalities they cover.
+  const citedItems = allIds
+    .map((id) => byId.get(id))
+    .filter((it): it is EvidenceItem => Boolean(it))
+    .sort((a, b) => a.t_start - b.t_start);
+  const presentLanes = new Set(citedItems.map((it) => laneOf(it.kind)));
+  const hasLinkage = citedItems.length > 0;
 
   function lite(ids: string[]) {
     if (!ids.length) return;
@@ -92,14 +122,52 @@ export function CaptionCard({ caption, candidates = [], byId, index }: Props) {
           })}
         </p>
 
-        <div className="mt-3 flex items-center gap-2">
+        {/* Compact modality badges + collapsible evidence (collapsed by default). */}
+        <div className="mt-3 flex flex-wrap items-center gap-2">
           <CopyButton text={caption.text} />
-          {hasLinkage && (
-            <span className="num text-[11px] text-bay-ink-3">
-              cites {allIds.length} evidence {allIds.length === 1 ? "item" : "items"}
+          {BADGE_ORDER.filter((l) => presentLanes.has(l)).map((l) => (
+            <span
+              key={l}
+              className={`chip gap-1 ${BADGE_CLASS[l]}`}
+              title={`Grounded in ${BADGE_LABEL[l].toLowerCase()} evidence`}
+            >
+              <CheckIcon /> {BADGE_LABEL[l]}
             </span>
+          ))}
+          {hasLinkage && (
+            <button
+              onClick={() => setShowEvidence((v) => !v)}
+              className="chip ml-auto gap-1.5 hover:border-signal/50 hover:text-bay-ink"
+              aria-expanded={showEvidence}
+            >
+              {showEvidence ? "Hide evidence" : "View evidence"}
+              <Chevron open={showEvidence} />
+            </button>
           )}
         </div>
+
+        <AnimatePresence initial={false}>
+          {showEvidence && hasLinkage && (
+            <motion.ul
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.25, ease: "easeOut" }}
+              className="mt-3 space-y-1.5 overflow-hidden border-t border-bay-line pt-3"
+            >
+              {citedItems.map((it) => (
+                <li key={it.id} className="flex items-start gap-2 text-[12.5px] leading-snug">
+                  <span className={`mt-1 h-2 w-2 shrink-0 rounded-[2px] ${BADGE_DOT[laneOf(it.kind)]}`} />
+                  <span className="min-w-0">
+                    <span className="num text-signal">{it.id}</span>{" "}
+                    <span className="num text-bay-ink-3">{timecode(it.t_start)}</span>{" "}
+                    <span className="text-bay-ink-2">{it.content}</span>
+                  </span>
+                </li>
+              ))}
+            </motion.ul>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* Score radar + reasons */}
@@ -164,6 +232,14 @@ function Reason({ label, v, why }: { label: string; v: number; why?: string }) {
       </span>
       <span className="text-bay-ink-2">{why}</span>
     </div>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg width="10" height="10" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path d="M3 8.5 6.5 12 13 4.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   );
 }
 

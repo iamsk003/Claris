@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import useWebSocket, { ReadyState } from "react-use-websocket";
+import { AnimatePresence, motion } from "framer-motion";
 import { TopBar } from "../components/TopBar";
-import { StageTimeline } from "../components/StageTimeline";
 import { api } from "../config";
 import { useRunStore } from "../store/useRunStore";
 import { useNavigate } from "../router";
@@ -9,13 +9,25 @@ import { useDemoStream } from "../demo/useDemoStream";
 import { DEMO_RUN_ID, isDemoRunId } from "../demo/sampleRun";
 import type { RunEvent } from "../types";
 
+// Presentation-only status copy. The real progress/completion signal is still the backend
+// event stream (handled by the unchanged effects below); these phrases are a smooth overlay.
+const PHRASES = [
+  "Analyzing video…",
+  "Extracting frames…",
+  "Reading on-screen text…",
+  "Understanding visuals…",
+  "Listening to speech…",
+  "Generating captions…",
+  "Preparing results…",
+];
+
 export function Processing({ runId }: { runId: string }) {
   const navigate = useNavigate();
   const applyEvent = useRunStore((s) => s.applyEvent);
   const reset = useRunStore((s) => s.reset);
   const setMode = useRunStore((s) => s.setMode);
   const stages = useRunStore((s) => s.stages);
-  const localVideoUrl = useRunStore((s) => s.localVideoUrl);
+  const events = useRunStore((s) => s.events);
 
   const startsDemo = isDemoRunId(runId);
   const [demo, setDemo] = useState(startsDemo);
@@ -67,64 +79,153 @@ export function Processing({ runId }: { runId: string }) {
   // Demo replay. On done, always route to the bundled sample result.
   useDemoStream(demo, applyEvent, () => goResults(DEMO_RUN_ID));
 
+  // ---- presentation only: smooth status-text progression ----------------- #
+  const [phase, setPhase] = useState(0);
+
+  // March through the phrases so the copy always feels alive; hold at "Generating captions…"
+  // until the backend signals the run is finishing.
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      if (!navigated.current) setPhase((p) => (p < 5 ? p + 1 : p));
+    }, 1700);
+    return () => clearInterval(id);
+  }, []);
+
+  // A finishing event jumps straight to "Preparing results…".
+  useEffect(() => {
+    const last = events[events.length - 1];
+    if (last && /(finish|done|prepar|select)/.test((last.stage || "").toLowerCase())) {
+      setPhase(6);
+    }
+  }, [events]);
+
   const connecting = !demo && readyState === ReadyState.CONNECTING && !gotEvent.current;
+  const complete = stages.done?.status === "done";
+  const progress = complete ? 1 : (phase + 1) / PHRASES.length;
 
   return (
     <div className="min-h-full">
       <TopBar />
-      <main className="mx-auto max-w-5xl px-6 py-10">
-        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className="text-xl font-semibold text-bay-ink">Processing</h1>
-            <p className="num mt-1 text-xs text-bay-ink-3">
-              run {runId} · {stages.done?.status === "done" ? "complete" : "in progress"}
-            </p>
-          </div>
-          {demo ? (
-            <span className="chip border-signal/50 text-signal">
-              <span className="h-1.5 w-1.5 rounded-full bg-signal" /> demo mode · sample data
-            </span>
-          ) : connecting ? (
-            <span className="chip">connecting to backend…</span>
-          ) : (
-            <span className="chip border-lane-visual/50 text-lane-visual">
-              <span className="h-1.5 w-1.5 rounded-full bg-lane-visual" /> live event stream
-            </span>
-          )}
+      <main className="mx-auto flex min-h-[calc(100vh-3.5rem)] max-w-2xl flex-col items-center justify-center px-6 py-8">
+        <ProgressRing progress={progress} />
+
+        <div className="mt-6 h-8 text-center">
+          <AnimatePresence mode="wait">
+            <motion.p
+              key={phase}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.35, ease: "easeOut" }}
+              className="text-lg font-medium tracking-tight text-bay-ink"
+            >
+              {PHRASES[phase]}
+            </motion.p>
+          </AnimatePresence>
         </div>
 
-        {demo && (
-          <div className="mb-4 rounded-lg border border-signal/30 bg-signal/5 px-4 py-2.5 text-sm text-bay-ink-2">
-            No backend reachable, so this is a recorded sample run replayed at its real
-            intervals. Connect a backend at <span className="num text-signal">VITE_API_URL</span> to
-            process your own clip.
-          </div>
-        )}
-
-        <div className="grid gap-5 md:grid-cols-[1fr_320px]">
-          <StageTimeline stages={stages} />
-          <aside className="space-y-4">
-            {localVideoUrl && !demo && (
-              <div className="panel overflow-hidden">
-                <video src={localVideoUrl} muted className="aspect-video w-full bg-black" />
-                <div className="num border-t border-bay-line px-3 py-2 text-[11px] text-bay-ink-3">
-                  your clip
-                </div>
-              </div>
-            )}
-            <div className="panel p-4 text-sm text-bay-ink-2">
-              <h3 className="mb-2 text-xs font-medium uppercase tracking-widest text-bay-ink-3">
-                What you're watching
-              </h3>
-              <p>
-                Perception fans out into four parallel readers — speech, on-screen text, audio,
-                and vision — then a ledger is assembled and every generated caption is gated
-                against it before selection.
-              </p>
-            </div>
-          </aside>
+        {/* Phase dots */}
+        <div className="mt-5 flex items-center gap-2">
+          {PHRASES.map((_, i) => (
+            <span
+              key={i}
+              className="h-1.5 rounded-full transition-all duration-500"
+              style={{
+                width: i === phase ? 22 : 6,
+                backgroundColor:
+                  i < phase || complete
+                    ? "rgba(255,176,58,0.8)"
+                    : i === phase
+                      ? "#ffb03a"
+                      : "rgba(255,255,255,0.14)",
+              }}
+            />
+          ))}
         </div>
+
+        <p className="num mt-6 text-[11px] uppercase tracking-widest text-bay-ink-3">
+          {demo
+            ? "sample data · replaying a recorded run"
+            : connecting
+              ? "connecting to backend…"
+              : "grounding every caption in the evidence"}
+        </p>
       </main>
+    </div>
+  );
+}
+
+/** Animated CLARIS mark inside a circular progress ring. */
+function ProgressRing({ progress }: { progress: number }) {
+  const R = 82;
+  const C = 2 * Math.PI * R;
+  return (
+    <div className="relative h-44 w-44 sm:h-52 sm:w-52">
+      {/* soft pulsing halo */}
+      <div className="absolute inset-6 rounded-full bg-signal/10 blur-2xl animate-pulse-signal" />
+
+      <svg viewBox="0 0 200 200" className="absolute inset-0 h-full w-full -rotate-90">
+        <circle cx="100" cy="100" r={R} fill="none" stroke="#292d33" strokeWidth="3" />
+        {/* determinate arc — advances with the run */}
+        <circle
+          cx="100"
+          cy="100"
+          r={R}
+          fill="none"
+          stroke="#ffb03a"
+          strokeWidth="3"
+          strokeLinecap="round"
+          strokeDasharray={C}
+          strokeDashoffset={C * (1 - Math.min(1, Math.max(0, progress)))}
+          style={{ transition: "stroke-dashoffset 0.8s ease", filter: "drop-shadow(0 0 6px rgba(255,176,58,0.5))" }}
+        />
+      </svg>
+
+      {/* indeterminate spinner arc for continuous motion */}
+      <svg viewBox="0 0 200 200" className="absolute inset-0 h-full w-full animate-spin" style={{ animationDuration: "2.6s" }}>
+        <circle
+          cx="100"
+          cy="100"
+          r={R - 9}
+          fill="none"
+          stroke="#ffb03a"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeDasharray={`${2 * Math.PI * (R - 9) * 0.16} ${2 * Math.PI * (R - 9)}`}
+          opacity="0.55"
+        />
+      </svg>
+
+      {/* animated logo mark */}
+      <div className="absolute inset-0 flex items-center justify-center">
+        <motion.div
+          initial={{ scale: 0.9, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ duration: 0.5, ease: "easeOut" }}
+        >
+          <svg
+            width="70"
+            height="70"
+            viewBox="0 0 24 24"
+            fill="none"
+            aria-hidden="true"
+            style={{ filter: "drop-shadow(0 0 10px rgba(255,176,58,0.35))" }}
+          >
+            <rect x="2.5" y="4.5" width="19" height="15" rx="2.5" stroke="#e7e9ec" strokeWidth="1.2" />
+            <motion.line
+              x1="14"
+              y1="3.5"
+              x2="14"
+              y2="20.5"
+              stroke="#ffb03a"
+              strokeWidth="1.6"
+              animate={{ x1: [9, 18, 9], x2: [9, 18, 9] }}
+              transition={{ duration: 3.2, repeat: Infinity, ease: "easeInOut" }}
+            />
+            <circle cx="8" cy="12" r="2.4" stroke="#e7e9ec" strokeWidth="1.2" />
+          </svg>
+        </motion.div>
+      </div>
     </div>
   );
 }

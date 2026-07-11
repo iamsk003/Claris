@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { motion } from "framer-motion";
 import { TopBar } from "../components/TopBar";
 import { VideoPlayer } from "../components/VideoPlayer";
 import { EvidenceTimeline } from "../components/EvidenceTimeline";
@@ -98,13 +99,19 @@ export function Results({ runId }: { runId: string }) {
         {/* Captions — left on desktop, below on mobile */}
         <section className="order-2 space-y-4 lg:order-1">
           {captions.map((c, i) => (
-            <CaptionCard
+            <motion.div
               key={c.style}
-              caption={c}
-              candidates={data.candidates?.[c.style] ?? []}
-              byId={byId}
-              index={i}
-            />
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.06, duration: 0.4, ease: "easeOut" }}
+            >
+              <CaptionCard
+                caption={c}
+                candidates={data.candidates?.[c.style] ?? []}
+                byId={byId}
+                index={i}
+              />
+            </motion.div>
           ))}
 
           <p className="num px-1 text-[11px] leading-relaxed text-bay-ink-3">
