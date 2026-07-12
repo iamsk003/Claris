@@ -89,7 +89,16 @@ async def resolve_providers(
                          embed_fn=_minilm_embed()), roles
 
     lf, pf = make_probes(cfg.base_url, cfg.api_key, client)
-    models = await discover(list_fn or lf, probe_fn or pf)
+    try:
+        models = await discover(list_fn or lf, probe_fn or pf)
+    except Exception as exc:  # noqa: BLE001 — discovery failure degrades, never crashes the agent
+        roles = ResolvedRoles(
+            None, None, None, None, False,
+            (f"discovery failed ({repr(exc)[:160]}); no models reachable",),
+        )
+        un = _UnavailableProvider("discovery failed")
+        return Providers(gen_provider=un, judge=un, critic=un, vision_provider=None,
+                         embed_fn=_minilm_embed()), roles
     roles = resolve_roles(models)
 
     def chat(model: Optional[str]):
