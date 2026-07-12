@@ -58,37 +58,27 @@ _SYSTEM = (
 # Concise per-style voice guides (distilled from generation/styles/*.yaml). Kept inline so
 # the single prompt is self-contained and cheap to build.
 _STYLE_GUIDE = (
-    "All four captions must describe the EXACT SAME facts in the SAME chronological order. "
-    "Only the writing style changes. Never add, remove, exaggerate, or invent events.\n\n"
+    "Write each style in plain, natural English a real person would actually speak — short, "
+    "common words over long or academic ones. The examples below are for a DIFFERENT video "
+    "(a cat knocking a cup off a table); copy their VOICE, never their content.\n\n"
 
-    "Natural language is more important than sounding intelligent. "
-    "Write like a human, not like an AI. Prefer simple everyday verbs such as "
-    "\"walks\", \"runs\", \"looks\", \"turns\", \"sits\", \"stands\", "
-    "\"heads toward\", \"comes into view\", \"picks up\", and \"opens\". "
-    "Avoid stiff wording such as \"traverses\", \"characterized by\", "
-    "\"maintaining\", \"executes\", or \"forward movement algorithm\".\n\n"
+    "- formal: a clear, factual account, like a calm news caption.\n"
+    "  e.g. \"A cat pushes a cup off a table, and it shatters on the floor.\"\n\n"
 
-    "- formal:\n"
-    "Write like a professional documentary narrator or news editor. "
-    "Neutral, concise, chronological, and factual. "
-    "No opinions, no exaggeration, no unnecessary adjectives.\n\n"
+    "- sarcastic: one dry, understated line; the humor is in the irony, and it stays true.\n"
+    "  e.g. \"Great, the cat has decided the cup lives on the floor now.\"\n\n"
 
-    "- sarcastic:\n"
-    "Write one dry observational joke while remaining completely factual. "
-    "The humor should come from irony or understatement, never from inventing events "
-    "or insulting people.\n\n"
+    "- tech_humor: write the caption the way a software engineer would jokingly describe the "
+    "situation to another engineer. Compare the situation to familiar engineering experiences "
+    "(deployments, debugging, flaky tests, merge conflicts, rollbacks, CI, etc.). Do not "
+    "rename ordinary actions with technical jargon.\n"
+    "  e.g. \"Cat pushed to prod without review; the cup did not survive rollback.\"\n\n"
 
-    "- tech_humor:\n"
-    "Write like an experienced software engineer making a playful observation. "
-    "Use authentic developer humor such as cache miss, merge conflict, loading, "
-    "runtime error, API call, feature request, debug mode, memory leak, hotfix, "
-    "rollback, dependency hell, null pointer, infinite loop, or compiling. "
-    "Do NOT replace ordinary actions with fake technical descriptions like "
-    "\"executes locomotion algorithm\" or \"forward movement protocol\".\n\n"
+    "- everyday_humor: a warm, funny line, like texting a friend about it.\n"
+    "  e.g. \"The cat looked me dead in the eye and yeeted the cup. Bold move.\"\n\n"
 
-    "- everyday_humor:\n"
-    "Write like someone sending a funny text to a friend. "
-    "Warm, light, relatable, conversational, and grounded."
+    "These examples demonstrate ONLY writing style. Never copy the scenario, objects, "
+    "animals, or events from the examples. Describe only the supplied evidence."
 )
 
 
@@ -120,13 +110,10 @@ def build_prompt(evidence: dict, n_frames: int) -> str:
     return (
         f"{n_frames} keyframes from the video are attached, in chronological order.\n\n"
         f"EVIDENCE (timestamps in seconds):\n{json.dumps(evidence, ensure_ascii=False)}\n\n"
-        f"First write a canonical caption that faithfully describes the complete video in "
-        f"chronological order. The canonical caption should be 1-2 natural sentences using "
-        f"simple, everyday English. Then rewrite that SAME caption into four different tones. "
-        f"Do not change events, order, people, objects, actions, dialogue, or timing. Every "
-        f"style must describe exactly the same video; only the writing style should change. "
-        f"When speech exists, prioritize the transcript over visual guessing. Keep every "
-        f"caption concise and prefer natural wording over impressive wording. {_STYLE_GUIDE}\n\n"
+        f"First write a canonical caption: 1-2 sentences that faithfully describe the whole "
+        f"video in the order events happen, using the transcript when speech is present. Then "
+        f"restate that same caption in each of the four styles. Keep the same facts and order "
+        f"in every style; only the tone and wording change.\n\n{_STYLE_GUIDE}\n\n"
         f"Set \"grounded\" false if the evidence and frames are too thin to caption "
         f"reliably. Set each \"modalities\" flag by whether you actually used that channel.\n\n"
         f"Return ONLY this JSON object:\n{schema}"

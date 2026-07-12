@@ -15,14 +15,40 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
+# Install ONLY third-party deps first (not the local claris project) so the expensive model
+# bakes below stay cached and are NOT invalidated when application source changes.
+# Locked deps include python-multipart (needed by /upload); websockets for /ws comes via
+# uvicorn[standard].
 COPY pyproject.toml uv.lock README.md ./
+RUN uv sync --locked --no-dev --no-install-project
+
+# Runtime ENV, set once before the model warm-up (Docker ENV persists to later layers).
+# Offline enforcement (HF_HUB_OFFLINE / TRANSFORMERS_OFFLINE) is deliberately NOT set: if the
+# baked cache is ever incomplete, allow a one-time download rather than degrade (perception
+# already degrades gracefully on model-load failure). HF_HUB_ETAG_TIMEOUT=2 caps the per-load
+# Hub revision check at 2s (huggingface_hub honors it over the default 10s), so an unreachable
+# Hub falls back to the baked cache fast instead of hanging.
+ENV PATH="/app/.venv/bin:$PATH" \
+    PYTHONUNBUFFERED=1 \
+    HF_HOME=/opt/hf-cache \
+    PADDLE_OCR_BASE_DIR=/opt/paddleocr \
+    CLARIS_WHISPER_MODEL=base \
+    HF_HUB_ETAG_TIMEOUT=2
+
+# Bake perception model weights into the image at BUILD time so the running container performs
+# ZERO model downloads on first inference (avoids Railway/eval cold-start timeouts). HF_HOME /
+# PADDLE_OCR_BASE_DIR (set above) place the caches; `--no-sync` runs in the deps-only venv
+# without installing the not-yet-copied project. faster-whisper 'base' is a hard step; PaddleOCR
+# is non-fatal because it SIGSEGVs under arm->amd64 QEMU emulation (a native amd64 build, e.g.
+# Railway, populates /opt/paddleocr and runtime reads it back with no network).
+RUN uv run --no-sync python -c "from faster_whisper import download_model; download_model('base')"
+RUN uv run --no-sync python -c "from paddleocr import PaddleOCR; PaddleOCR(use_angle_cls=True, lang='en', show_log=False)" || true
+
+# Application source + install the local project (deps already resolved above, so this is
+# the only step a code change re-runs — the model bakes stay cached).
 COPY claris ./claris
-# Installs from the locked deps, which now include python-multipart (needed by /upload).
-# The websockets library for /ws is already pulled in by uvicorn[standard].
 RUN uv sync --locked --no-dev
 
-ENV PATH="/app/.venv/bin:$PATH" \
-    PYTHONUNBUFFERED=1
 EXPOSE 8000
 # Bind the platform-provided $PORT (Railway/Render inject it) with a local fallback, so the
 # service is reachable and its health check passes. Shell form is required for $PORT to expand.
