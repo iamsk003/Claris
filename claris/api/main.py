@@ -304,12 +304,34 @@ async def _process(
 # --------------------------------------------------------------------------- #
 
 
+async def _warm_ocr() -> None:
+    """Initialize the shared PaddleOCR engine once, off the request path.
+
+    PaddleOCR's constructor downloads model weights and starts the native runtime; doing it
+    at startup (in a thread, so the event loop and /health stay responsive) means the first
+    caption request reuses a ready engine instead of paying that cost inline. Non-fatal:
+    perception already degrades gracefully if OCR is unavailable.
+    """
+    try:
+        from claris.core.perception.ocr import warm_ocr  # noqa: PLC0415
+
+        await asyncio.to_thread(warm_ocr)
+        _log(logging.INFO, "ocr engine initialized")
+    except Exception as exc:  # noqa: BLE001
+        _log(logging.WARNING, "ocr warm-up failed; will init on first use", error=repr(exc))
+
+
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
-    yield
-    clips = getattr(app.state, "clips", None)
-    if clips is not None:
-        clips.clear()  # remove any temp clip files on shutdown
+    # Warm OCR in the background immediately after startup (does not block boot or /health).
+    warm_task = asyncio.create_task(_warm_ocr())
+    try:
+        yield
+    finally:
+        warm_task.cancel()
+        clips = getattr(app.state, "clips", None)
+        if clips is not None:
+            clips.clear()  # remove any temp clip files on shutdown
 
 
 def create_app() -> FastAPI:

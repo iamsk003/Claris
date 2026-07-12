@@ -11,6 +11,7 @@ Filtering and dedup are pure and unit tested; the PaddleOCR engine is injected v
 from __future__ import annotations
 
 import re
+import threading
 from typing import Callable, Optional
 
 from pydantic import BaseModel
@@ -20,6 +21,27 @@ from claris.core.perception.shots import Keyframe
 from claris.core.schema import EvidenceItem
 
 SOURCE_MODEL = "paddleocr"
+
+# Process-wide PaddleOCR engine. Built once (its constructor downloads model weights and
+# initializes the native runtime — expensive) and reused for every OCR call. `warm_ocr()`
+# builds it off the request path at service startup; if not warmed, the first caller builds it.
+_ENGINE: Optional[Callable[[str], list[OcrBox]]] = None
+_ENGINE_LOCK = threading.Lock()
+
+
+def get_ocr_engine(cfg: Optional[PerceptionConfig] = None) -> Callable[[str], list[OcrBox]]:
+    """Return the shared PaddleOCR engine, constructing it once (thread-safe)."""
+    global _ENGINE
+    if _ENGINE is None:
+        with _ENGINE_LOCK:
+            if _ENGINE is None:
+                _ENGINE = _paddle_engine(cfg or PerceptionConfig())
+    return _ENGINE
+
+
+def warm_ocr(cfg: Optional[PerceptionConfig] = None) -> None:
+    """Initialize the shared OCR engine now (call at startup to keep it off the request path)."""
+    get_ocr_engine(cfg)
 
 
 class OcrBox(BaseModel):
@@ -96,7 +118,7 @@ def run_ocr(
     on what is actually written on each frame.
     """
     cfg = cfg or PerceptionConfig()
-    engine = ocr_fn or _paddle_engine(cfg)
+    engine = ocr_fn or get_ocr_engine(cfg)
 
     frame_boxes: list[tuple[float, OcrBox]] = []
     per_frame: dict[float, list[str]] = {}

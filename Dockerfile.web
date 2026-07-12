@@ -35,14 +35,13 @@ ENV PATH="/app/.venv/bin:$PATH" \
     CLARIS_WHISPER_MODEL=base \
     HF_HUB_ETAG_TIMEOUT=2
 
-# Bake perception model weights into the image at BUILD time so the running container performs
-# ZERO model downloads on first inference (avoids Railway/eval cold-start timeouts). HF_HOME /
-# PADDLE_OCR_BASE_DIR (set above) place the caches; `--no-sync` runs in the deps-only venv
-# without installing the not-yet-copied project. faster-whisper 'base' is a hard step; PaddleOCR
-# is non-fatal because it SIGSEGVs under arm->amd64 QEMU emulation (a native amd64 build, e.g.
-# Railway, populates /opt/paddleocr and runtime reads it back with no network).
+# Bake the faster-whisper 'base' weights into HF_HOME at BUILD time so the container performs
+# no ASR download on first inference. `--no-sync` runs in the deps-only venv without installing
+# the not-yet-copied project. Hard step: the image must not ship without the ASR cache.
+# PaddleOCR is deliberately NOT warmed here — its constructor aborts (SIGABRT) during the
+# Docker build, even on Railway's builder, so it cannot be pre-baked. OCR is instead
+# initialized once at API startup (see claris.api.main._warm_ocr), off the request path.
 RUN uv run --no-sync python -c "from faster_whisper import download_model; download_model('base')"
-RUN uv run --no-sync python -c "from paddleocr import PaddleOCR; PaddleOCR(use_angle_cls=True, lang='en', show_log=False)" || true
 
 # Application source + install the local project (deps already resolved above, so this is
 # the only step a code change re-runs — the model bakes stay cached).
