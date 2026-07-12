@@ -1,6 +1,7 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { getResult, startRun, uploadClip } from "./client";
 import { getDemoResult, isDemoRunId } from "../demo/sampleRun";
+import { getHistoryResult } from "../lib/history";
 
 export function useUploadClip() {
   return useMutation({
@@ -25,7 +26,14 @@ export function useRunResult(runId: string | undefined) {
     queryFn: async () => {
       if (!runId) throw new Error("missing runId");
       if (isDemoRunId(runId)) return getDemoResult();
-      return getResult(runId);
+      try {
+        return await getResult(runId);
+      } catch (e) {
+        // Reopen from browser-local history when the backend no longer has the run.
+        const cached = getHistoryResult(runId);
+        if (cached) return cached;
+        throw e;
+      }
     },
   });
 }

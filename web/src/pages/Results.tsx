@@ -8,6 +8,7 @@ import { useRunResult } from "../api/hooks";
 import { useRunStore } from "../store/useRunStore";
 import { useInspectStore } from "../store/useInspectStore";
 import { indexById } from "../lib/evidence";
+import { recordFromResult } from "../lib/history";
 import { api } from "../config";
 import { isDemoRunId } from "../demo/sampleRun";
 import { ALL_STYLES, type StyledCaption } from "../types";
@@ -39,6 +40,11 @@ export function Results({ runId }: { runId: string }) {
       clearCaption();
     };
   }, [clearPin, clearCaption]);
+
+  // Persist completed runs to browser-local history (skip the bundled sample).
+  useEffect(() => {
+    if (data && !isDemo) recordFromResult(runId, data);
+  }, [data, isDemo, runId]);
 
   const byId = useMemo(() => (data ? indexById(data.ledger.items) : new Map()), [data]);
 

@@ -9,7 +9,7 @@ export function Logo({ className = "" }: { className?: string }) {
         <line x1="14" y1="3.5" x2="14" y2="20.5" stroke="#ffb03a" strokeWidth="1.6" />
         <circle cx="8" cy="12" r="2.4" stroke="#9ba1a8" strokeWidth="1.3" />
       </svg>
-      <span className="text-[15px] font-semibold tracking-tight text-bay-ink">CLARIS</span>
+      <span className="text-[15px] font-semibold tracking-tight text-bay-ink">CLARIS AI</span>
     </span>
   );
 }

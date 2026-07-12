@@ -19,7 +19,7 @@ const FEATURES = [
   },
 ];
 
-const TECH = ["Gemma", "Whisper", "PaddleOCR", "OpenCV", "Fireworks AI"];
+const TECH = ["Whisper", "PaddleOCR", "OpenCV", "Fireworks AI"];
 
 const stagger = {
   hidden: { opacity: 0, y: 10 },
@@ -45,7 +45,7 @@ export function Landing() {
             Captions you can <span className="text-signal">trace back</span> to the footage.
           </motion.h1>
           <motion.p variants={stagger} custom={2} className="mt-5 max-w-2xl text-lg text-bay-ink-2">
-            CLARIS turns a short clip into four styled captions and shows its work — each line
+            CLARIS AI turns a short clip into four styled captions and shows its work — each line
             linked to the timestamped speech, on-screen text, audio, and visuals that support it.
           </motion.p>
           <motion.div variants={stagger} custom={3} className="mt-8 flex flex-wrap items-center gap-3">

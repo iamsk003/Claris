@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import { TopBar } from "../components/TopBar";
 import { DropZone } from "../components/DropZone";
+import { HistoryPanel } from "../components/HistoryPanel";
 import { startRun, uploadClip } from "../api/client";
 import { useRunStore } from "../store/useRunStore";
 import { useNavigate, Link } from "../router";
 import { bytes } from "../lib/format";
+import { captureThumbnail, putPending } from "../lib/history";
 import { DEMO_RUN_ID } from "../demo/sampleRun";
 
 export function Upload() {
@@ -19,6 +21,9 @@ export function Upload() {
   const [progress, setProgress] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [tab, setTab] = useState<"file" | "url">("file");
+  const [url, setUrl] = useState("");
+  const [sourceUrl, setSourceUrl] = useState<string | null>(null);
 
   useEffect(() => {
     return () => {
@@ -26,11 +31,36 @@ export function Upload() {
     };
   }, [previewUrl]);
 
-  function choose(f: File) {
+  function choose(f: File, from: string | null = null) {
     setError(null);
     setFile(f);
+    setSourceUrl(from);
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewUrl(URL.createObjectURL(f));
+  }
+
+  async function loadUrl() {
+    const u = url.trim();
+    if (!/^https?:\/\/\S+/i.test(u)) {
+      setError("Enter a direct http(s) link to a video file.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(u);
+      if (!res.ok) throw new Error(`Fetch failed (${res.status})`);
+      const blob = await res.blob();
+      const name = decodeURIComponent(u.split("/").pop()?.split("?")[0] || "video.mp4");
+      choose(new File([blob], name, { type: blob.type || "video/mp4" }), u);
+    } catch (e) {
+      setError(
+        (e instanceof Error ? e.message : "Could not load that URL") +
+          " — the link must be a direct, publicly accessible video that allows cross-origin access (CORS).",
+      );
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function generate() {
@@ -44,6 +74,12 @@ export function Upload() {
       const { run_id } = await startRun(clip_id);
       setRun(run_id);
       setMode("live");
+      const thumbnail = await captureThumbnail(previewUrl);
+      putPending(run_id, {
+        label: sourceUrl ?? file.name,
+        source: sourceUrl ? "url" : "file",
+        thumbnail,
+      });
       navigate(`/processing/${run_id}`);
     } catch (e) {
       setError(
@@ -65,7 +101,52 @@ export function Upload() {
 
         <div className="mt-6">
           {!file ? (
-            <DropZone onFile={choose} />
+            <div className="space-y-4">
+              <div className="inline-flex rounded-lg border border-bay-line p-0.5 text-sm">
+                {(["file", "url"] as const).map((t) => (
+                  <button
+                    key={t}
+                    className={`rounded-md px-3 py-1.5 ${
+                      tab === t ? "bg-signal/10 text-signal" : "text-bay-ink-2"
+                    }`}
+                    onClick={() => {
+                      setTab(t);
+                      setError(null);
+                    }}
+                  >
+                    {t === "file" ? "Upload file" : "Paste video URL"}
+                  </button>
+                ))}
+              </div>
+
+              {tab === "file" ? (
+                <DropZone onFile={(f) => choose(f)} />
+              ) : (
+                <div className="panel p-4">
+                  <label className="text-xs text-bay-ink-2" htmlFor="video-url">
+                    Direct link to a publicly accessible video (http/https)
+                  </label>
+                  <div className="mt-2 flex gap-2">
+                    <input
+                      id="video-url"
+                      type="url"
+                      inputMode="url"
+                      placeholder="https://example.com/clip.mp4"
+                      value={url}
+                      onChange={(e) => setUrl(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") loadUrl();
+                      }}
+                      className="min-w-0 flex-1 rounded-md border border-bay-line bg-transparent px-3 py-2 text-sm text-bay-ink outline-none focus:border-signal"
+                      disabled={busy}
+                    />
+                    <button className="btn btn-signal px-4" onClick={loadUrl} disabled={busy || !url.trim()}>
+                      {busy ? "Loading…" : "Load"}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           ) : (
             <div className="panel overflow-hidden">
               <video src={previewUrl!} controls className="max-h-[46vh] w-full bg-black" />
@@ -78,6 +159,7 @@ export function Upload() {
                   className="btn px-3 py-1.5 text-xs"
                   onClick={() => {
                     setFile(null);
+                    setSourceUrl(null);
                     if (previewUrl) URL.revokeObjectURL(previewUrl);
                     setPreviewUrl(null);
                   }}
@@ -114,6 +196,8 @@ export function Upload() {
             </Link>
           </div>
         )}
+
+        <HistoryPanel />
       </main>
     </div>
   );
