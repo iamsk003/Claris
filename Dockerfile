@@ -28,17 +28,20 @@ RUN uv sync --locked --no-dev
 ENV HF_HOME=/opt/hf-cache \
     SENTENCE_TRANSFORMERS_HOME=/opt/hf-cache \
     CLARIS_WHISPER_MODEL=base
-RUN uv run python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')" \
- && uv run python -c "from faster_whisper import download_model; download_model('base')"
+# Hard preloads (no `|| true`): a successful build therefore GUARANTEES these caches are
+# baked, which is what makes HF_HUB_OFFLINE safe in the runtime stage.
+RUN uv run python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')"
+RUN uv run python -c "from faster_whisper import download_model; download_model('base')"
 
-# PaddleOCR downloads its det/rec/angle-cls weights on first construction. Bake them in so
-# OCR needs no network at runtime, same as the two preloads above. Non-fatal on purpose:
-# under x86 emulation on an arm build host paddle can SIGSEGV at import, and OCR is an
-# optional modality that degrades to empty — a native amd64 build populates the cache, and
-# if this step is skipped the runtime path still works via a one-time download.
-ENV PADDLE_OCR_BASE_DIR=/opt/paddleocr
-RUN mkdir -p /opt/paddleocr \
+# PaddleOCR 2.x ignores any base-dir env and downloads its det/rec/angle-cls weights to its
+# default home (~/.paddleocr == /root/.paddleocr in this stage). Warm that home so OCR needs
+# no network at runtime. The verify line prints the resolved base dir into the build log so
+# the copy target is confirmed, not assumed. Non-fatal on purpose: under x86 emulation on an
+# arm build host paddle can SIGSEGV at import, and OCR degrades to empty — a native amd64
+# build populates the cache; the mkdir keeps the runtime COPY valid either way.
+RUN mkdir -p /root/.paddleocr \
  && uv run python -c "from paddleocr import PaddleOCR; PaddleOCR(use_angle_cls=True, lang='en', show_log=False)" || true
+RUN uv run python -c "import paddleocr.paddleocr as p, os; d=p.BASE_DIR; print('PADDLE_BASE_DIR', d, 'exists', os.path.isdir(d), 'files', sum(len(f) for _,_,f in os.walk(d)))" || true
 
 # ---- runtime stage ----------------------------------------------------------
 FROM python:3.11-slim AS runtime
@@ -49,19 +52,19 @@ RUN apt-get update \
 WORKDIR /app
 COPY --from=build /app/.venv /app/.venv
 COPY --from=build /opt/hf-cache /opt/hf-cache
-COPY --from=build /opt/paddleocr /opt/paddleocr
+COPY --from=build /root/.paddleocr /root/.paddleocr
 COPY claris ./claris
 COPY eval ./eval
 
 # HF_HUB_OFFLINE / TRANSFORMERS_OFFLINE guarantee the preloaded caches are used and no
-# request goes to HuggingFace at runtime.
+# request goes to HuggingFace at runtime. Safe because the build stage's HF preloads are
+# hard (no `|| true`), so this image only exists if those caches were baked.
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     HF_HOME=/opt/hf-cache \
     SENTENCE_TRANSFORMERS_HOME=/opt/hf-cache \
     HF_HUB_OFFLINE=1 \
     TRANSFORMERS_OFFLINE=1 \
-    PADDLE_OCR_BASE_DIR=/opt/paddleocr \
     CLARIS_WHISPER_MODEL=base \
     CLARIS_CACHE_DIR=/app/.claris_cache \
     CLARIS_LOG_DIR=/app/.claris_logs
