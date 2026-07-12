@@ -228,7 +228,17 @@ async def reason_over_clip(
         data = parse_reasoning(result.text)
         tier, model = result.provider_tier, result.model
     except Exception as exc:  # noqa: BLE001 — one failed call degrades, never crashes the task
-        _emit(sink, run_id, task.task_id, "reasoning_failed", error=repr(exc)[:200])
+        # TEMP instrumentation: surface why the single call failed. Behavior unchanged.
+        resp = getattr(exc, "response", None)
+        body = getattr(resp, "text", None)
+        _emit(
+            sink, run_id, task.task_id, "reasoning_failed",
+            exc_type=type(exc).__name__,
+            exc_msg=str(exc)[:500],
+            http_status=getattr(resp, "status_code", None),
+            response_body=body[:1000] if isinstance(body, str) else None,
+            error=repr(exc)[:200],
+        )
         data, tier, model = None, ProviderTier.TEMPLATE, "unavailable"
 
     task_result = reasoning_to_result(task, ledger, data, tier=tier, model=model, run_id=run_id)
