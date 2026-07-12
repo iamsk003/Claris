@@ -238,7 +238,7 @@ async def _process(
     from claris.agent.config import AgentConfig  # noqa: PLC0415
     from claris.agent.main import resolve_providers  # noqa: PLC0415
     from claris.core.observability import NullSink  # noqa: PLC0415
-    from claris.core.perception import PerceptionConfig, build_ledger  # noqa: PLC0415
+    from claris.core.perception import PerceptionConfig, build_perception  # noqa: PLC0415
     from claris.core.pipeline import run_from_ledger  # noqa: PLC0415
     from claris.core.schema import ALL_STYLES, StyleName, Task  # noqa: PLC0415
 
@@ -259,15 +259,13 @@ async def _process(
                 vision_model=roles.vlm or PerceptionConfig().vision_model
             )
 
-            # 2) Perception: video -> EvidenceLedger (reused; blocks in this worker loop).
+            # 2) Perception: video -> PerceptionBundle (textual ledger + keyframes).
             publish(STAGE_FRAMES, "active", "Probing container and sampling keyframes")
             publish(STAGE_SPEECH, "active", "Transcribing audio")
             publish(STAGE_OCR, "active", "Reading on-screen text")
-            publish(STAGE_SCENE, "active", "Describing keyframes")
-            ledger = await build_ledger(
-                task, perception_config,
-                vision_provider=providers.vision_provider, sink=sink,
-            )
+            publish(STAGE_SCENE, "active", "Selecting keyframes")
+            bundle = await build_perception(task, perception_config, sink=sink)
+            ledger = bundle.ledger
             flags = ledger.modality_flags
             n = lambda kind: sum(1 for it in ledger.items if it.kind.value == kind)  # noqa: E731
             publish(STAGE_FRAMES, "done",
@@ -277,18 +275,17 @@ async def _process(
                     else ("no speech detected" if flags.is_silent else "no audio track"))
             publish(STAGE_OCR, "done",
                     f"{n('ocr')} text regions" if flags.has_ocr else "no on-screen text")
-            publish(STAGE_SCENE, "done",
-                    f"{n('visual')} keyframes described" if flags.has_visual
-                    else "no vision model available")
+            publish(STAGE_SCENE, "done", f"{len(bundle.keyframes)} keyframes selected")
 
-            # 3) Generation + verification: ledger -> TaskResult (reused verbatim).
+            # 3) One multimodal reasoning call: ledger + keyframes -> TaskResult.
             publish(STAGE_CAPTION, "active",
-                    f"Generating and grounding {len(task_styles)} styles")
+                    f"Reasoning over the clip and writing {len(task_styles)} styles")
             result = await run_from_ledger(
-                ledger, task, providers, sink=sink, run_id=run_id,
+                ledger, task, providers, keyframes=bundle.keyframes,
+                perception_config=perception_config, sink=sink, run_id=run_id,
             )
             publish(STAGE_CAPTION, "done",
-                    "degraded" if result.degraded else "4 captions selected and verified")
+                    "degraded" if result.degraded else "4 captions written")
 
             envelope = _result_envelope(run_id, task_id, clip_id, ledger, result)
             # Degraded is still a completed run with captions — end it as a success.

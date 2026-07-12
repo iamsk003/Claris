@@ -21,6 +21,7 @@ class PerceptionConfig:
     # OCR filtering.
     ocr_min_confidence: float = 0.5
     ocr_min_area_frac: float = 0.0008        # drop sub-pixel noise boxes
+    ocr_timeout_s: float = 5.0               # OCR is optional; past this it contributes nothing
 
     # Audio event thresholds (coarse, honest tags only).
     audio_silence_rms: float = 0.01          # below this RMS a window counts as silent

@@ -15,6 +15,7 @@ import asyncio
 import json
 import os
 import sys
+import traceback
 from pathlib import Path
 from typing import Awaitable, Callable, Optional
 
@@ -62,13 +63,6 @@ class _UnavailableProvider:
         raise RuntimeError(f"no model resolved for this role: {self._reason}")
 
 
-def _minilm_embed():
-    from claris.core.verification.config import VerificationConfig
-    from claris.core.verification.separation import _minilm_embed as embed
-    vc = VerificationConfig()
-    return lambda texts: embed(texts, vc)
-
-
 async def resolve_providers(
     cfg: AgentConfig, *, client: httpx.AsyncClient,
     list_fn=None, probe_fn=None,
@@ -84,15 +78,15 @@ async def resolve_providers(
         m = cfg.deployment_model
         roles = ResolvedRoles(vlm=m, gen=m, gate1=m, critic=m,
                               gemma_path_used=is_gemma(m or ""), notes=("dedicated deployment",))
-        return Providers(gen_provider=gen, judge=gen, critic=gen, vision_provider=vis,
-                         embed_fn=_minilm_embed()), roles
+        return Providers(reasoning_provider=vis, gen_provider=gen, judge=gen, critic=gen,
+                         vision_provider=vis), roles
 
     if not cfg.api_key:
         roles = ResolvedRoles(None, None, None, None, False,
                               ("no FIREWORKS_API_KEY; no models reachable",))
         un = _UnavailableProvider("no api key")
-        return Providers(gen_provider=un, judge=un, critic=un, vision_provider=None,
-                         embed_fn=_minilm_embed()), roles
+        return Providers(reasoning_provider=un, gen_provider=un, judge=un, critic=un,
+                         vision_provider=None), roles
 
     lf, pf = make_probes(cfg.base_url, cfg.api_key, client)
     try:
@@ -103,8 +97,8 @@ async def resolve_providers(
             (f"discovery failed ({repr(exc)[:160]}); no models reachable",),
         )
         un = _UnavailableProvider("discovery failed")
-        return Providers(gen_provider=un, judge=un, critic=un, vision_provider=None,
-                         embed_fn=_minilm_embed()), roles
+        return Providers(reasoning_provider=un, gen_provider=un, judge=un, critic=un,
+                         vision_provider=None), roles
     roles = resolve_roles(models)
 
     def chat(model: Optional[str]):
@@ -114,9 +108,10 @@ async def resolve_providers(
 
     vision = (FireworksVisionProvider(base_url=cfg.base_url, model=roles.vlm,
                                       api_key=cfg.api_key, client=client) if roles.vlm else None)
-    return Providers(gen_provider=chat(roles.gen), judge=chat(roles.gate1),
-                     critic=chat(roles.critic), vision_provider=vision,
-                     embed_fn=_minilm_embed()), roles
+    reasoning = vision if vision is not None else _UnavailableProvider("no multimodal model")
+    return Providers(reasoning_provider=reasoning, gen_provider=chat(roles.gen),
+                     judge=chat(roles.gate1), critic=chat(roles.critic),
+                     vision_provider=vision), roles
 
 
 def read_tasks(input_path: str) -> list[Task]:
@@ -207,9 +202,14 @@ async def run_agent(
                 timeout=min(cfg.task_timeout_s, remaining),
             )
         except Exception as exc:  # noqa: BLE001 — one bad clip must not sink the batch
+            # TEMP instrumentation: surface the real failure (behavior unchanged).
             sink.emit(RunEvent(run_id=run_id, event_id=f"{run_id}:{task.task_id}:task_failed",
                                stage="agent", event_type="task_failed", level="error",  # type: ignore[arg-type]
-                               task_id=task.task_id, payload={"error": repr(exc)}))
+                               task_id=task.task_id,
+                               payload={"error": repr(exc),
+                                        "exc_type": type(exc).__name__,
+                                        "exc_msg": str(exc),
+                                        "traceback": traceback.format_exc()}))
             result = _degraded_result(task, run_id, repr(exc))
 
         results.append(result)
@@ -227,10 +227,8 @@ async def run_agent(
 
 def _log_resolution(roles: ResolvedRoles) -> None:
     _stderr("[claris] model resolution:")
-    _stderr(f"  vlm    = {roles.vlm}")
-    _stderr(f"  gen    = {roles.gen}")
-    _stderr(f"  gate_1 = {roles.gate1}")
-    _stderr(f"  critic = {roles.critic}")
+    _stderr(f"  reasoning  = {roles.vlm}")
+    _stderr(f"  generation = {roles.gen}")
     _stderr(f"  gemma_path_used = {roles.gemma_path_used}")
     for note in roles.notes:
         _stderr(f"  note: {note}")
@@ -262,8 +260,12 @@ async def _amain() -> int:
                 _stderr(f"FATAL (CLARIS_STRICT_MODELS=1): {err}")
                 return 3
 
+        _roles = roles.as_dict()
         metadata = {
-            "resolved_roles": roles.as_dict(),
+            "resolved_roles": {"reasoning": _roles.get("vlm"),
+                               "generation": _roles.get("gen"),
+                               "gemma_path_used": _roles.get("gemma_path_used"),
+                               "notes": _roles.get("notes")},
             "gemma_path_used": roles.gemma_path_used,
             "deployment": cfg.has_deployment,
             "strict": cfg.strict,

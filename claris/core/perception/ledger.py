@@ -9,10 +9,13 @@ the whole path can run offline with fakes.
 
 from __future__ import annotations
 
+import asyncio
+import traceback
 from typing import Callable, Optional
 
 from claris.core.observability import EventSink, NullSink
 from claris.core.perception.audio_events import analyze_audio
+from claris.core.perception.bundle import PerceptionBundle
 from claris.core.perception.config import PerceptionConfig
 from claris.core.perception.ocr import OcrBox, run_ocr
 from claris.core.perception.shots import Keyframe, extract_keyframes
@@ -100,30 +103,24 @@ def assemble_ledger(
     )
 
 
-async def build_ledger(
+async def _collect_signals(
     task: Task,
-    cfg: Optional[PerceptionConfig] = None,
+    cfg: PerceptionConfig,
+    sink: EventSink,
     *,
-    vision_provider: Optional[VisionProvider] = None,
-    video_path: Optional[str] = None,
-    sink: Optional[EventSink] = None,
-    probe_fn: Optional[Callable] = None,
-    extract_audio_fn: Optional[Callable] = None,
-    keyframe_fn: Optional[Callable] = None,
-    ocr_fn: Optional[Callable[[str], list[OcrBox]]] = None,
-    transcribe_fn: Optional[Callable[[str, PerceptionConfig], list[SpeechSegment]]] = None,
-    audio_feature_fn: Optional[Callable] = None,
-) -> EvidenceLedger:
-    """Turn a video file into an EvidenceLedger.
+    video_path: str,
+    probe_fn: Optional[Callable],
+    extract_audio_fn: Optional[Callable],
+    keyframe_fn: Optional[Callable],
+    ocr_fn: Optional[Callable[[str], list[OcrBox]]],
+    transcribe_fn: Optional[Callable[[str, PerceptionConfig], list[SpeechSegment]]],
+    audio_feature_fn: Optional[Callable],
+) -> tuple[VideoMeta, list[Keyframe], dict, list[EvidenceItem], bool, Callable]:
+    """Run every non-visual perception channel. Shared by build_ledger + build_perception.
 
-    Every heavy stage is injectable, so tests exercise the full assembly offline with
-    fakes and zero network calls. Defaults wire the real ffprobe / scenedetect /
-    PaddleOCR / faster-whisper / librosa paths.
+    Returns (meta, keyframes, per_frame_ocr, non_visual_items, is_silent, warn_fn). Each
+    heavy stage is injectable and failure-isolated: one dead modality never sinks the rest.
     """
-    cfg = cfg or PerceptionConfig()
-    sink = sink or NullSink()
-    video_path = video_path or task.video_path
-
     probe_fn = probe_fn or _default_probe
     keyframe_fn = keyframe_fn or (lambda p, c: extract_keyframes(p, c))
     extract_audio_fn = extract_audio_fn or _default_extract_audio
@@ -144,12 +141,16 @@ async def build_ledger(
 
     def _warn(stage: str, exc: Exception) -> None:
         # One failing modality must not sink the whole ledger — partial credit is credit.
+        # TEMP instrumentation: full type/message/traceback (behavior unchanged).
         sink.emit(RunEvent(
             run_id=f"perception_{task.task_id}",
             event_id=f"perception_{task.task_id}:{stage}_failed",
             stage="perception", event_type="stage_failed",
             level="warn",  # type: ignore[arg-type]
-            task_id=task.task_id, payload={"stage": stage, "error": repr(exc)[:200]},
+            task_id=task.task_id,
+            payload={"stage": stage, "error": repr(exc)[:200],
+                     "exc_type": type(exc).__name__, "exc_msg": str(exc),
+                     "traceback": traceback.format_exc()},
         ))
 
     try:
@@ -163,9 +164,14 @@ async def build_ledger(
         audio_path = None
         _warn("audio_extract", exc)
 
+    # OCR is optional and strictly time-bounded: on timeout or any failure it contributes
+    # nothing and never blocks the rest of perception.
     try:
-        ocr_items, per_frame = run_ocr(keyframes, cfg, ocr_fn=ocr_fn)
-    except Exception as exc:  # noqa: BLE001
+        ocr_items, per_frame = await asyncio.wait_for(
+            asyncio.to_thread(run_ocr, keyframes, cfg, ocr_fn=ocr_fn),
+            timeout=cfg.ocr_timeout_s,
+        )
+    except Exception as exc:  # noqa: BLE001 — includes asyncio.TimeoutError
         ocr_items, per_frame = [], {}
         _warn("ocr", exc)
     try:
@@ -179,6 +185,42 @@ async def build_ledger(
     except Exception as exc:  # noqa: BLE001
         audio_items = []
         _warn("audio_events", exc)
+
+    base_items: list[EvidenceItem] = (
+        list(motion_items) + list(ocr_items) + list(speech_items) + list(audio_items)
+    )
+    return meta, list(keyframes), per_frame, base_items, is_silent, _warn
+
+
+async def build_ledger(
+    task: Task,
+    cfg: Optional[PerceptionConfig] = None,
+    *,
+    vision_provider: Optional[VisionProvider] = None,
+    video_path: Optional[str] = None,
+    sink: Optional[EventSink] = None,
+    probe_fn: Optional[Callable] = None,
+    extract_audio_fn: Optional[Callable] = None,
+    keyframe_fn: Optional[Callable] = None,
+    ocr_fn: Optional[Callable[[str], list[OcrBox]]] = None,
+    transcribe_fn: Optional[Callable[[str, PerceptionConfig], list[SpeechSegment]]] = None,
+    audio_feature_fn: Optional[Callable] = None,
+) -> EvidenceLedger:
+    """Turn a video file into an EvidenceLedger (public API, unchanged).
+
+    When a ``vision_provider`` is supplied the per-frame VLM visual layer is appended, as
+    before. CLARIS v2 leaves it None and reasons over the keyframes downstream instead —
+    see ``build_perception``.
+    """
+    cfg = cfg or PerceptionConfig()
+    sink = sink or NullSink()
+    video_path = video_path or task.video_path
+
+    meta, keyframes, per_frame, base_items, is_silent, _warn = await _collect_signals(
+        task, cfg, sink, video_path=video_path, probe_fn=probe_fn,
+        extract_audio_fn=extract_audio_fn, keyframe_fn=keyframe_fn, ocr_fn=ocr_fn,
+        transcribe_fn=transcribe_fn, audio_feature_fn=audio_feature_fn,
+    )
 
     if vision_provider is None:
         # No vision model reachable: ledger from speech + OCR + audio + motion only.
@@ -194,15 +236,41 @@ async def build_ledger(
             visual_items = []
             _warn("vision", exc)
 
-    all_items: list[EvidenceItem] = (
-        list(motion_items)
-        + list(ocr_items)
-        + list(speech_items)
-        + list(audio_items)
-        + list(visual_items)
-    )
+    all_items = base_items + list(visual_items)
     models = [it.source_model for it in all_items] + [cfg.vision_model, cfg.whisper_model]
     return assemble_ledger(task, meta, all_items, models, is_silent=is_silent)
+
+
+async def build_perception(
+    task: Task,
+    cfg: Optional[PerceptionConfig] = None,
+    *,
+    video_path: Optional[str] = None,
+    sink: Optional[EventSink] = None,
+    probe_fn: Optional[Callable] = None,
+    extract_audio_fn: Optional[Callable] = None,
+    keyframe_fn: Optional[Callable] = None,
+    ocr_fn: Optional[Callable[[str], list[OcrBox]]] = None,
+    transcribe_fn: Optional[Callable[[str, PerceptionConfig], list[SpeechSegment]]] = None,
+    audio_feature_fn: Optional[Callable] = None,
+) -> PerceptionBundle:
+    """CLARIS v2 perception: a textual ledger (no per-frame VLM) plus the keyframes.
+
+    The keyframes ride in the returned PerceptionBundle for the single downstream reasoning
+    call; they never enter the frozen ledger.
+    """
+    cfg = cfg or PerceptionConfig()
+    sink = sink or NullSink()
+    video_path = video_path or task.video_path
+
+    meta, keyframes, _per_frame, base_items, is_silent, _warn = await _collect_signals(
+        task, cfg, sink, video_path=video_path, probe_fn=probe_fn,
+        extract_audio_fn=extract_audio_fn, keyframe_fn=keyframe_fn, ocr_fn=ocr_fn,
+        transcribe_fn=transcribe_fn, audio_feature_fn=audio_feature_fn,
+    )
+    models = [it.source_model for it in base_items] + [cfg.whisper_model]
+    ledger = assemble_ledger(task, meta, base_items, models, is_silent=is_silent)
+    return PerceptionBundle(ledger=ledger, keyframes=tuple(keyframes))
 
 
 def _default_probe(video_path: str, cfg: PerceptionConfig):  # pragma: no cover

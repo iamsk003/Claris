@@ -12,18 +12,22 @@ lazy and every heavy stage is injectable, so the assembly logic runs and is test
 offline with zero network calls.
 """
 
+from claris.core.perception.bundle import PerceptionBundle
 from claris.core.perception.config import PerceptionConfig
 from claris.core.perception.ledger import (
     assemble_ledger,
     assign_ids,
     build_ledger,
+    build_perception,
     compute_modality_flags,
     interval_union_coverage,
 )
 
 __all__ = [
     "PerceptionConfig",
+    "PerceptionBundle",
     "build_ledger",
+    "build_perception",
     "assemble_ledger",
     "assign_ids",
     "compute_modality_flags",
