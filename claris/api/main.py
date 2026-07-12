@@ -51,7 +51,7 @@ from typing import Any, Callable, Optional
 
 from fastapi import FastAPI, File, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 
 # --------------------------------------------------------------------------- #
 # Structured logging
@@ -512,6 +512,94 @@ def create_app() -> FastAPI:
         if clip is None or not Path(clip.video_path).exists():
             return JSONResponse(status_code=404, content={"error": "unknown clip_id"})
         return FileResponse(clip.video_path, media_type="video/mp4", filename=clip.filename)
+
+    @app.get("/api/fetch-video")
+    async def fetch_video(url: str):
+        """Server-side proxy for a public direct video URL the browser can't fetch due to CORS.
+
+        Downloads server-side (no browser CORS applies) and streams the bytes back same-origin
+        so the normal upload flow can continue unchanged. Direct .mp4/.webm only; share and
+        streaming pages are rejected with a clear message.
+        """
+        import ipaddress  # noqa: PLC0415
+        import re  # noqa: PLC0415
+        import socket  # noqa: PLC0415
+        from urllib.parse import urlparse  # noqa: PLC0415
+
+        import httpx  # noqa: PLC0415
+
+        MAX_BYTES = 500 * 1024 * 1024  # hard cap on the proxied download
+
+        def _non_public(target: str) -> Optional[str]:
+            # Not an open proxy: only fetch names that resolve to public IPs (block SSRF to
+            # localhost / private / link-local / reserved ranges and cloud metadata).
+            host = urlparse(target).hostname
+            if not host:
+                return "invalid host"
+            try:
+                infos = socket.getaddrinfo(host, None)
+            except socket.gaierror:
+                return "host did not resolve"
+            for info in infos:
+                ip = ipaddress.ip_address(info[4][0])
+                if not ip.is_global or ip.is_multicast:
+                    return "non-public address"
+            return None
+
+        if not re.match(r"^https?://", url, re.IGNORECASE):
+            return JSONResponse(status_code=400, content={"error": "Provide a direct http(s) video URL."})
+        low = url.lower()
+        blocked = ("youtube.com", "youtu.be", "drive.google.com", "instagram.com",
+                   "tiktok.com", "facebook.com", "vimeo.com/")
+        if any(h in low for h in blocked):
+            return JSONResponse(status_code=400, content={
+                "error": "That's a share/streaming page, not a direct video file. "
+                         "Paste a direct .mp4 or .webm link."})
+        if _non_public(url) is not None:
+            return JSONResponse(status_code=400, content={"error": "That host is not a public address."})
+
+        client = httpx.AsyncClient(follow_redirects=True, timeout=httpx.Timeout(60.0))
+        try:
+            resp = await client.send(client.build_request("GET", url), stream=True)
+        except Exception as exc:  # noqa: BLE001
+            await client.aclose()
+            return JSONResponse(status_code=502,
+                                content={"error": f"Could not reach that URL ({exc.__class__.__name__})."})
+
+        async def _reject(status: int, message: str) -> JSONResponse:
+            await resp.aclose()
+            await client.aclose()
+            return JSONResponse(status_code=status, content={"error": message})
+
+        # Redirects may land on an internal address; validate the final URL too.
+        if _non_public(str(resp.url)) is not None:
+            return await _reject(400, "That host is not a public address.")
+
+        ctype = resp.headers.get("content-type", "")
+        is_video = ctype.startswith("video/") or low.split("?")[0].endswith(
+            (".mp4", ".mov", ".m4v", ".webm"))
+        if resp.status_code >= 400 or not is_video:
+            return await _reject(
+                400, f"URL did not return a direct video (status {resp.status_code}, "
+                     f"type {ctype or 'unknown'}).")
+
+        clen = resp.headers.get("content-length")
+        if clen and clen.isdigit() and int(clen) > MAX_BYTES:
+            return await _reject(413, f"Video exceeds the {MAX_BYTES // (1 << 20)} MB limit.")
+
+        async def _stream():
+            total = 0
+            try:
+                async for chunk in resp.aiter_bytes(1 << 16):
+                    total += len(chunk)
+                    if total > MAX_BYTES:  # cap servers that lie about / omit content-length
+                        break
+                    yield chunk
+            finally:
+                await resp.aclose()
+                await client.aclose()
+
+        return StreamingResponse(_stream(), media_type=ctype or "video/mp4")
 
     @app.get("/api/runs/{run_id}")
     async def get_run(run_id: str) -> JSONResponse:

@@ -14,6 +14,7 @@ export const api = {
   events: (runId: string) => `${WS_URL}/api/runs/${runId}/events`,
   result: (runId: string) => `${API_URL}/api/runs/${runId}`,
   clipVideo: (clipId: string) => `${API_URL}/api/clips/${clipId}/video`,
+  fetchVideo: (u: string) => `${API_URL}/api/fetch-video?url=${encodeURIComponent(u)}`,
 };
 
 /** Soft cap: warn above this, never block. */

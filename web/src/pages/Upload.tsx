@@ -3,6 +3,7 @@ import { TopBar } from "../components/TopBar";
 import { DropZone } from "../components/DropZone";
 import { HistoryPanel } from "../components/HistoryPanel";
 import { startRun, uploadClip } from "../api/client";
+import { api } from "../config";
 import { useRunStore } from "../store/useRunStore";
 import { useNavigate, Link } from "../router";
 import { bytes } from "../lib/format";
@@ -48,15 +49,20 @@ export function Upload() {
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch(u);
-      if (!res.ok) throw new Error(`Fetch failed (${res.status})`);
+      // Go through the backend proxy: the browser cannot fetch most public video hosts
+      // directly (CORS), but the server can download them and stream the bytes back.
+      const res = await fetch(api.fetchVideo(u));
+      if (!res.ok) {
+        const msg = await res.json().then((d) => d?.error).catch(() => null);
+        throw new Error(msg || `Could not load that URL (${res.status}).`);
+      }
       const blob = await res.blob();
       const name = decodeURIComponent(u.split("/").pop()?.split("?")[0] || "video.mp4");
       choose(new File([blob], name, { type: blob.type || "video/mp4" }), u);
     } catch (e) {
       setError(
         (e instanceof Error ? e.message : "Could not load that URL") +
-          " — the link must be a direct, publicly accessible video that allows cross-origin access (CORS).",
+          " — use a direct, publicly accessible .mp4/.webm link (not YouTube, Google Drive, or a social share page).",
       );
     } finally {
       setBusy(false);
