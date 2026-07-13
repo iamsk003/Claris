@@ -27,10 +27,6 @@ dependencies = [
     "imagehash",
     "pillow",
     "faster-whisper",
-    # Pin to the 2.x line: 3.x removed show_log and changed the .ocr() result format the
-    # OCR parser expects. (Regenerate uv.lock in a real env for this to take effect.)
-    "paddleocr>=2.7,<3.0",
-    "paddlepaddle==2.6.2",
     "Cython<3",
     "setuptools<70",
     "numpy==1.26.4",

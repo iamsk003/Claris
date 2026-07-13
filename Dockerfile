@@ -33,16 +33,6 @@ ENV HF_HOME=/opt/hf-cache \
 RUN uv run python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')"
 RUN uv run python -c "from faster_whisper import download_model; download_model('base')"
 
-# PaddleOCR 2.x ignores any base-dir env and downloads its det/rec/angle-cls weights to its
-# default home (~/.paddleocr == /root/.paddleocr in this stage). Warm that home so OCR needs
-# no network at runtime. The verify line prints the resolved base dir into the build log so
-# the copy target is confirmed, not assumed. Non-fatal on purpose: under x86 emulation on an
-# arm build host paddle can SIGSEGV at import, and OCR degrades to empty — a native amd64
-# build populates the cache; the mkdir keeps the runtime COPY valid either way.
-RUN mkdir -p /root/.paddleocr \
- && uv run python -c "from paddleocr import PaddleOCR; PaddleOCR(use_angle_cls=True, lang='en', show_log=False)" || true
-RUN uv run python -c "import paddleocr.paddleocr as p, os; d=p.BASE_DIR; print('PADDLE_BASE_DIR', d, 'exists', os.path.isdir(d), 'files', sum(len(f) for _,_,f in os.walk(d)))" || true
-
 # ---- runtime stage ----------------------------------------------------------
 FROM python:3.11-slim AS runtime
 RUN apt-get update \
@@ -52,7 +42,6 @@ RUN apt-get update \
 WORKDIR /app
 COPY --from=build /app/.venv /app/.venv
 COPY --from=build /opt/hf-cache /opt/hf-cache
-COPY --from=build /root/.paddleocr /root/.paddleocr
 COPY claris ./claris
 COPY eval ./eval
 

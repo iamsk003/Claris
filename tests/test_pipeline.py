@@ -82,7 +82,7 @@ def test_run_pipeline_perception_to_reasoning_end_to_end(tmp_path):
     result = asyncio.run(run_pipeline(
         Task(task_id="t1", video_path="x.mp4"), _providers(),
         probe_fn=probe_fn, keyframe_fn=lambda p, c: ([kf], [motion]),
-        ocr_fn=lambda path: [], transcribe_fn=lambda path, cfg: ([], False),
+        transcribe_fn=lambda path, cfg: ([], False),
     ))
     assert set(result.captions) == set(ALL_STYLES)
     assert result.degraded is False

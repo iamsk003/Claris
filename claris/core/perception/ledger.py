@@ -9,7 +9,6 @@ the whole path can run offline with fakes.
 
 from __future__ import annotations
 
-import asyncio
 import traceback
 from typing import Callable, Optional
 
@@ -17,7 +16,6 @@ from claris.core.observability import EventSink, NullSink
 from claris.core.perception.audio_events import analyze_audio
 from claris.core.perception.bundle import PerceptionBundle
 from claris.core.perception.config import PerceptionConfig
-from claris.core.perception.ocr import OcrBox, run_ocr
 from claris.core.perception.shots import Keyframe, extract_keyframes
 from claris.core.perception.speech import SpeechSegment, transcribe
 from claris.core.perception.vision import describe_keyframes
@@ -112,7 +110,6 @@ async def _collect_signals(
     probe_fn: Optional[Callable],
     extract_audio_fn: Optional[Callable],
     keyframe_fn: Optional[Callable],
-    ocr_fn: Optional[Callable[[str], list[OcrBox]]],
     transcribe_fn: Optional[Callable[[str, PerceptionConfig], list[SpeechSegment]]],
     audio_feature_fn: Optional[Callable],
 ) -> tuple[VideoMeta, list[Keyframe], dict, list[EvidenceItem], bool, Callable]:
@@ -164,16 +161,10 @@ async def _collect_signals(
         audio_path = None
         _warn("audio_extract", exc)
 
-    # OCR is optional and strictly time-bounded: on timeout or any failure it contributes
-    # nothing and never blocks the rest of perception.
-    try:
-        ocr_items, per_frame = await asyncio.wait_for(
-            asyncio.to_thread(run_ocr, keyframes, cfg, ocr_fn=ocr_fn),
-            timeout=cfg.ocr_timeout_s,
-        )
-    except Exception as exc:  # noqa: BLE001 — includes asyncio.TimeoutError
-        ocr_items, per_frame = [], {}
-        _warn("ocr", exc)
+    # OCR (PaddleOCR) has been removed; the vision model reads on-screen text directly from
+    # the keyframes. No OCR items are produced, so evidence["ocr"] stays an empty list.
+    ocr_items: list[EvidenceItem] = []
+    per_frame: dict = {}
     try:
         speech_items, is_silent = transcribe(audio_path or "", meta, cfg,
                                              transcribe_fn=transcribe_fn)
@@ -202,7 +193,6 @@ async def build_ledger(
     probe_fn: Optional[Callable] = None,
     extract_audio_fn: Optional[Callable] = None,
     keyframe_fn: Optional[Callable] = None,
-    ocr_fn: Optional[Callable[[str], list[OcrBox]]] = None,
     transcribe_fn: Optional[Callable[[str, PerceptionConfig], list[SpeechSegment]]] = None,
     audio_feature_fn: Optional[Callable] = None,
 ) -> EvidenceLedger:
@@ -218,7 +208,7 @@ async def build_ledger(
 
     meta, keyframes, per_frame, base_items, is_silent, _warn = await _collect_signals(
         task, cfg, sink, video_path=video_path, probe_fn=probe_fn,
-        extract_audio_fn=extract_audio_fn, keyframe_fn=keyframe_fn, ocr_fn=ocr_fn,
+        extract_audio_fn=extract_audio_fn, keyframe_fn=keyframe_fn,
         transcribe_fn=transcribe_fn, audio_feature_fn=audio_feature_fn,
     )
 
@@ -250,7 +240,6 @@ async def build_perception(
     probe_fn: Optional[Callable] = None,
     extract_audio_fn: Optional[Callable] = None,
     keyframe_fn: Optional[Callable] = None,
-    ocr_fn: Optional[Callable[[str], list[OcrBox]]] = None,
     transcribe_fn: Optional[Callable[[str, PerceptionConfig], list[SpeechSegment]]] = None,
     audio_feature_fn: Optional[Callable] = None,
 ) -> PerceptionBundle:
@@ -265,7 +254,7 @@ async def build_perception(
 
     meta, keyframes, _per_frame, base_items, is_silent, _warn = await _collect_signals(
         task, cfg, sink, video_path=video_path, probe_fn=probe_fn,
-        extract_audio_fn=extract_audio_fn, keyframe_fn=keyframe_fn, ocr_fn=ocr_fn,
+        extract_audio_fn=extract_audio_fn, keyframe_fn=keyframe_fn,
         transcribe_fn=transcribe_fn, audio_feature_fn=audio_feature_fn,
     )
     models = [it.source_model for it in base_items] + [cfg.whisper_model]

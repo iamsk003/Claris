@@ -48,10 +48,14 @@ _SYSTEM = (
     "(transcript, on-screen text, audio events, motion). Reason about the video AS A WHOLE, "
     "not as separate images: infer the single sequence of events that ties the frames "
     "together and describe them in chronological order. "
-    "Use the transcript as the primary source of what is said whenever it is present. Rely on "
-    "on-screen text only when it is actually visible in a frame. Do NOT invent objects, "
-    "people, names, brands, numbers, or actions that the frames and evidence do not support; "
-    "when something is uncertain, write \"appears to\" rather than stating it as fact. "
+    "READ ALL text that is visible in the frames yourself — UI text, on-screen captions and "
+    "subtitles, signs, logos, brand names, labels, buttons, and numbers — and weave the "
+    "meaningful text naturally into the summary and captions (do not just list it). "
+    "Use the transcript as the primary source of spoken words whenever it is present, and "
+    "treat clearly legible on-screen text as reliable evidence of what is written. Do NOT "
+    "invent objects, people, names, brands, numbers, or actions that the frames and evidence "
+    "do not support; when text or anything else is uncertain or unreadable, write \"appears "
+    "to\" rather than stating it as fact. "
     "Reply with ONE JSON object and nothing else."
 )
 

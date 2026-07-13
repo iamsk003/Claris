@@ -372,7 +372,6 @@ def test_build_ledger_end_to_end_offline(tmp_path: Path):
         probe_fn=lambda p, c: (_meta(60.0, True), None),
         extract_audio_fn=lambda p, c: str(tmp_path / "a.wav"),
         keyframe_fn=lambda p, c: (kfs, motion),
-        ocr_fn=lambda path: [OcrBox(text="ERROR 429", confidence=0.9, area_frac=0.02)],
         transcribe_fn=lambda p, c: [SpeechSegment(2.0, 5.0, "hello world", 0.9)],
         audio_feature_fn=lambda p, c: AudioFeatures(
             duration_s=60, onset_density=2.0, rms_mean=0.1, rms_max=0.3,
@@ -381,9 +380,7 @@ def test_build_ledger_end_to_end_offline(tmp_path: Path):
 
     assert ledger.task_id == "clip_e2e"
     assert ledger.coverage >= 0.85
-    assert ledger.modality_flags.has_visual and ledger.modality_flags.has_ocr
+    assert ledger.modality_flags.has_visual
     assert ledger.modality_flags.has_speech and ledger.modality_flags.has_motion
     assert all(i.id.startswith("E") for i in ledger.items)
     assert all(i.source_model and i.confidence is not None for i in ledger.items)
-    # OCR string survived into the ledger, grounding humorous_tech downstream.
-    assert any("429" in i.content for i in ledger.items if i.kind.value == "ocr")

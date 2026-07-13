@@ -11,7 +11,6 @@ Filtering and dedup are pure and unit tested; the PaddleOCR engine is injected v
 from __future__ import annotations
 
 import re
-import threading
 from typing import Callable, Optional
 
 from pydantic import BaseModel
@@ -21,27 +20,6 @@ from claris.core.perception.shots import Keyframe
 from claris.core.schema import EvidenceItem
 
 SOURCE_MODEL = "paddleocr"
-
-# Process-wide PaddleOCR engine. Built once (its constructor downloads model weights and
-# initializes the native runtime — expensive) and reused for every OCR call. `warm_ocr()`
-# builds it off the request path at service startup; if not warmed, the first caller builds it.
-_ENGINE: Optional[Callable[[str], list[OcrBox]]] = None
-_ENGINE_LOCK = threading.Lock()
-
-
-def get_ocr_engine(cfg: Optional[PerceptionConfig] = None) -> Callable[[str], list[OcrBox]]:
-    """Return the shared PaddleOCR engine, constructing it once (thread-safe)."""
-    global _ENGINE
-    if _ENGINE is None:
-        with _ENGINE_LOCK:
-            if _ENGINE is None:
-                _ENGINE = _paddle_engine(cfg or PerceptionConfig())
-    return _ENGINE
-
-
-def warm_ocr(cfg: Optional[PerceptionConfig] = None) -> None:
-    """Initialize the shared OCR engine now (call at startup to keep it off the request path)."""
-    get_ocr_engine(cfg)
 
 
 class OcrBox(BaseModel):
@@ -118,42 +96,17 @@ def run_ocr(
     on what is actually written on each frame.
     """
     cfg = cfg or PerceptionConfig()
-    engine = ocr_fn or get_ocr_engine(cfg)
+    # PaddleOCR has been removed; the vision model reads on-screen text directly from frames.
+    # This stays callable with an injected ``ocr_fn`` (used by tests); with none it contributes
+    # nothing, so the ledger carries no OCR items and evidence["ocr"] is an empty list.
+    if ocr_fn is None:
+        return [], {}
 
     frame_boxes: list[tuple[float, OcrBox]] = []
     per_frame: dict[float, list[str]] = {}
     for kf in keyframes:
-        boxes = filter_boxes(engine(kf.image_path), cfg)
+        boxes = filter_boxes(ocr_fn(kf.image_path), cfg)
         per_frame[kf.t_mid] = [b.text.strip() for b in boxes]
         frame_boxes.extend((kf.t_mid, b) for b in boxes)
 
     return dedup_ocr(frame_boxes), per_frame
-
-
-def _paddle_engine(cfg: PerceptionConfig) -> Callable[[str], list[OcrBox]]:  # pragma: no cover
-    from paddleocr import PaddleOCR  # noqa: PLC0415
-    from PIL import Image  # noqa: PLC0415
-
-    # PaddleOCR 3.x dropped the `show_log` kwarg; construct defensively so we work across
-    # versions instead of crashing with "Unknown argument: show_log".
-    try:
-        ocr = PaddleOCR(use_angle_cls=True, lang="en", show_log=False)
-    except (TypeError, ValueError):
-        ocr = PaddleOCR(use_angle_cls=True, lang="en")
-
-    def run(image_path: str) -> list[OcrBox]:
-        with Image.open(image_path) as im:
-            frame_area = float(im.width * im.height) or 1.0
-        result = ocr.ocr(image_path, cls=True) or []
-        boxes: list[OcrBox] = []
-        for line in result[0] if result and result[0] else []:
-            quad, (text, conf) = line
-            xs = [p[0] for p in quad]
-            ys = [p[1] for p in quad]
-            area = (max(xs) - min(xs)) * (max(ys) - min(ys))
-            boxes.append(
-                OcrBox(text=text, confidence=float(conf), area_frac=area / frame_area)
-            )
-        return boxes
-
-    return run
